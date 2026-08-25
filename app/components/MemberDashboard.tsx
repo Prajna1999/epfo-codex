@@ -14,13 +14,11 @@ export function MemberDashboard({ onNavigate }: { onNavigate: Navigate }) {
         <BalanceCard />
         <AccountHealthCard onNavigate={onNavigate} />
       </section>
-      <LatestContributionCard />
       <ServicesSection onNavigate={onNavigate} />
       <section className="dashboard-grid banking-grid">
         <RecentActivityCard onNavigate={onNavigate} />
         <ClaimStatusCard onNavigate={onNavigate} />
       </section>
-      <EmploymentSummaryCard onNavigate={onNavigate} />
     </>
   );
 }
@@ -112,22 +110,6 @@ function AccountHealthCard({ onNavigate }: { onNavigate: Navigate }) {
   );
 }
 
-function LatestContributionCard() {
-  const { t } = useLanguage();
-  return (
-    <section className="contribution-strip">
-      <div className="contribution-icon"><Icon name="building" size={20} /></div>
-      <div>
-        <span>{t("LATEST CONTRIBUTION")}</span>
-        <strong>{t("August contribution received")}</strong>
-        <small>Infosys Limited · {t("Deposited 18 August")}</small>
-      </div>
-      <strong>+ ₹8,430</strong>
-      <span className="status done">{t("Confirmed")}</span>
-    </section>
-  );
-}
-
 function ServicesSection({ onNavigate }: { onNavigate: Navigate }) {
   const { t } = useLanguage();
   return (
@@ -199,22 +181,5 @@ function ClaimStatusCard({ onNavigate }: { onNavigate: Navigate }) {
       </div>
       <button className="text-button" onClick={() => onNavigate("Withdraw")}>{t("Track withdrawal")} <Icon name="arrow" size={15} /></button>
     </article>
-  );
-}
-
-function EmploymentSummaryCard({ onNavigate }: { onNavigate: Navigate }) {
-  const { t } = useLanguage();
-  return (
-    <section className="panel employment-summary">
-      <div className="panel-head">
-        <div><p className="eyebrow">{t("EMPLOYMENT")}</p><h2>{t("Your PF follows you across jobs")}</h2></div>
-        <button onClick={() => onNavigate("Employment")}>{t("View employment history")} <Icon name="arrow" size={15} /></button>
-      </div>
-      <div className="employment-flow">
-        <div><span className="company-logo blue">IN</span><span><strong>Infosys Limited</strong><small>{t("Current · Contributions arriving normally")}</small></span><span className="status done">{t("Active")}</span></div>
-        <i />
-        <div><span className="company-logo amber">TC</span><span><strong>Techcore Systems</strong><small>Apr 2021 – Jun 2023</small></span><span className="status done">{t("PF transferred")}</span></div>
-      </div>
-    </section>
   );
 }

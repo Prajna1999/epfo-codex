@@ -65,7 +65,7 @@ No dedicated route currently exists for historical claims, employment details, a
   - `switchOpen`: context-switcher modal visibility.
   - `mobileOpen`: mobile sidebar visibility.
 - Context selection resets navigation to `Home` for members or `Overview` for employers.
-- Member Home renders `MemberDashboard`, member Money renders `Passbook`, employer Overview renders `EmployerDashboard`; every other dashboard section renders `PlaceholderView`.
+- Member Home renders `MemberDashboard`, member Money renders `Passbook`, member Employment renders `EmploymentHistory`, employer Overview renders `EmployerDashboard`; every other dashboard section renders `PlaceholderView`.
 - `app/components/PortalChrome.tsx` owns reusable structural UI:
   - `PortalTopbar`: branding, search, notifications, language control, and profile mock.
   - `PortalSidebar`: member/employer navigation and responsive open/close state.
@@ -78,11 +78,11 @@ No dedicated route currently exists for historical claims, employment details, a
 
 - `BalanceCard`: PF balance front face and UAN identity-card back face.
 - `AccountHealthCard`: verified account health checklist.
-- `LatestContributionCard`: latest Infosys contribution summary.
+- `PortalTopbar`: its bell opens the latest Infosys contribution notification; the summary is intentionally not duplicated in the dashboard body.
 - `ServicesSection` and `ServiceCard`: member quick actions.
 - `RecentActivityCard`: recent contribution transactions.
 - `ClaimStatusCard`: current medical advance progress.
-- `EmploymentSummaryCard`: Infosys and Techcore employment history.
+- `EmploymentHistory.tsx`: sidebar Employment view. It owns the connected-line display from Techcore Systems (transferred) to Infosys Limited (active); it is intentionally not shown on Home.
 
 The quick-action order is intentionally:
 

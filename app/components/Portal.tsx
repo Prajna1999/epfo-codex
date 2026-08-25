@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useLanguage } from "../language";
 import { EmployerDashboard } from "./EmployerDashboard";
+import { EmploymentHistory } from "./EmploymentHistory";
 import { Icon } from "./Icon";
 import { MemberDashboard } from "./MemberDashboard";
 import { Passbook } from "./Passbook";
@@ -43,9 +44,11 @@ export function Portal({ initialNav = "Home" }: { initialNav?: string }) {
       <PortalSidebar type={active.type} activeNav={activeNav} mobileOpen={mobileOpen} onNavigate={setActiveNav} onClose={() => setMobileOpen(false)} />
 
       <section className="content">
-        <PageHeader active={active} onSwitch={() => setSwitchOpen(true)} />
+        <PageHeader active={active} activeNav={activeNav} onSwitch={() => setSwitchOpen(true)} />
         {active.type === "member" && activeNav === "Money" ? (
           <Passbook />
+        ) : active.type === "member" && activeNav === "Employment" ? (
+          <EmploymentHistory />
         ) : !isHome ? (
           <PlaceholderView active={active} activeNav={activeNav} onReturn={() => setActiveNav(active.type === "member" ? "Home" : "Overview")} />
         ) : active.type === "member" ? (
@@ -60,9 +63,10 @@ export function Portal({ initialNav = "Home" }: { initialNav?: string }) {
   );
 }
 
-function PageHeader({ active, onSwitch }: { active: Context; onSwitch: () => void }) {
+function PageHeader({ active, activeNav, onSwitch }: { active: Context; activeNav: string; onSwitch: () => void }) {
   const { t, tpl } = useLanguage();
   const isMember = active.type === "member";
+  const isEmployment = isMember && activeNav === "Employment";
   return (
     <>
       <div className="context-strip">
@@ -72,8 +76,8 @@ function PageHeader({ active, onSwitch }: { active: Context; onSwitch: () => voi
       <div className="page-head">
         <div>
           <p className="eyebrow">{t("MONDAY, 24 AUGUST")}</p>
-          <h1>{t("Good afternoon, Rahul")}</h1>
-          <p>{isMember ? t("Your retirement savings, contributions and withdrawals in one place.") : tpl("Here’s what needs attention at {name}.", { name: t(active.name) })}</p>
+          <h1>{isEmployment ? t("Employment history") : t("Good afternoon, Rahul")}</h1>
+          <p>{isEmployment ? t("Your connected employment accounts and PF transfers.") : isMember ? t("Your retirement savings, contributions and withdrawals in one place.") : tpl("Here’s what needs attention at {name}.", { name: t(active.name) })}</p>
         </div>
         {isMember ? <a className="outline-button" href="/pf-statement.pdf" download="EPFO-PF-Statement-2026-27.pdf"><Icon name="file" size={17} />{t("Download statement")}</a> : <button className="outline-button"><Icon name="file" size={17} />{t("Download report")}</button>}
       </div>

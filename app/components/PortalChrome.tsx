@@ -29,6 +29,7 @@ const navigation = {
 
 export function PortalTopbar({ mobileOpen, onToggleMobile }: { mobileOpen: boolean; onToggleMobile: () => void }) {
   const { t } = useLanguage();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   return (
     <header className="topbar">
       <div className="brand">
@@ -40,7 +41,14 @@ export function PortalTopbar({ mobileOpen, onToggleMobile }: { mobileOpen: boole
       </div>
       <div className="topbar-actions">
         <label className="search"><Icon name="search" size={18} /><input aria-label={t("Search EPFO services")} placeholder={t("Search services")} /></label>
-        <button className="icon-button" aria-label={t("Notifications")}><Icon name="bell" /><span className="notification-dot" /></button>
+        <div className="notification-wrap">
+          <button className="icon-button" aria-label={t("Notifications")} aria-expanded={notificationsOpen} aria-controls="contribution-notification" onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" /><span className="notification-dot" /></button>
+          {notificationsOpen && <section id="contribution-notification" className="contribution-notification" aria-label={t("LATEST CONTRIBUTION")}>
+            <span className="contribution-icon"><Icon name="building" size={20} /></span>
+            <div><small>{t("LATEST CONTRIBUTION")}</small><strong>{t("August contribution received")}</strong><span>Infosys Limited · {t("Deposited 18 August")}</span></div>
+            <b>+ ₹8,430</b>
+          </section>}
+        </div>
         <LanguageSwitch />
         <button className="profile-button">
           <span className="avatar">RP</span>
