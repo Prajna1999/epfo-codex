@@ -8,4 +8,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 
 After end of each task, keep adding tiny context information in that session to this filer AGENTS.md
+
+Claims now use `/?view=Claims`; the sidebar label is Claims and the shared dashboard workspace is the only claims entry point.
+The root portal is fixed to the member experience; the account context selector was removed, and employer/CA portals require separate routes.
+Member sidebar order is Home, Claims, Passbook, Employment, Account; the homepage no longer includes Account Health.
+Claim-flow step labels are centered below their circles; connector lines run only between circles.
 <!-- END:nextjs-agent-rules -->

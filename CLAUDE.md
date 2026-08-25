@@ -10,7 +10,7 @@ This repository is a high-fidelity frontend prototype for a unified Employees’
 
 - An EPFO member managing personal PF savings, employment history, withdrawals, and account details.
 - An employer representative managing employees, ECR/contributions, payments, compliance, reports, and access.
-- Different employer contexts selected without signing in again.
+- Employer and CA users will use separate sign-in routes when those portals are implemented.
 
 The product principles are progressive disclosure, plain language, context-first navigation, and strong confirmation only for sensitive actions. `PRD.md` is the broad product source of truth. `CLAIM.md` is the source of truth for the simplified member claim journey.
 
@@ -33,21 +33,19 @@ This is currently a frontend prototype. There is no backend, database, authentic
 The unified dashboard route.
 
 - `app/page.tsx` awaits `searchParams`, validates `view`, and passes the result as `initialNav` to `Portal`.
-- Allowed member query values are `Home`, `Money`, `Employment`, `Withdraw`, and `Account`.
+- Allowed member query values are `Home`, `Claims`, `Passbook`, `Employment`, and `Account`.
 - Missing, repeated, or unknown values fall back to `Home`.
-- Example: `/?view=Money` opens the member passbook.
+- Example: `/?view=Passbook` opens the member passbook.
 - Because the route reads `searchParams`, the production build reports `/` as dynamically rendered.
 
-### `/claims/new`
+### Claims
 
-The guided member claim route.
+- `/?view=Claims&tab=start` is the canonical start-claim view and `/?view=Claims&tab=status` is the claim-history view; `claim` selects a history record.
+- `app/components/ClaimsWorkspace.tsx` embeds the guided `ClaimFlow` alongside compact, static claim history and a selected progress timeline.
+- There is no standalone claims route; the dashboard Claims workspace is the only member claims entry point.
+- The sidebar uses the member-facing **Claims** label.
 
-- `app/claims/layout.tsx` wraps claim pages in `MemberPortalShell`.
-- `app/claims/new/page.tsx` is a server page that exports route metadata and renders `ClaimFlow`.
-- The route is statically prerendered; all draft state begins in the client after hydration.
-- The portal sidebar shows Withdraw as active. Selecting another sidebar item returns to `/` with the corresponding `?view=` value.
-
-No dedicated route currently exists for historical claims, employment details, account settings, or employer subsections. Those continue to use dashboard placeholder views. The passbook is an in-dashboard Money view.
+No dedicated route currently exists for employment details, account settings, or employer subsections. Those continue to use dashboard placeholder views. The passbook is an in-dashboard Passbook view.
 
 ## Application composition
 
@@ -59,17 +57,11 @@ No dedicated route currently exists for historical claims, employment details, a
 
 ### Portal state and chrome
 
-- `app/components/Portal.tsx` owns the dashboard-only state:
-  - `activeId`: selected member/employer context.
-  - `activeNav`: selected sidebar section.
-  - `switchOpen`: context-switcher modal visibility.
-  - `mobileOpen`: mobile sidebar visibility.
-- Context selection resets navigation to `Home` for members or `Overview` for employers.
-- Member Home renders `MemberDashboard`, member Money renders `Passbook`, member Employment renders `EmploymentHistory`, employer Overview renders `EmployerDashboard`; every other dashboard section renders `PlaceholderView`.
+- `app/components/Portal.tsx` is a fixed member portal. It owns `activeNav`, Claims-tab state, and mobile-sidebar visibility.
+- Home renders `MemberDashboard`, Claims renders `ClaimsWorkspace`, Passbook renders `Passbook`, Employment renders `EmploymentHistory`, and Account uses `PlaceholderView`.
 - `app/components/PortalChrome.tsx` owns reusable structural UI:
   - `PortalTopbar`: branding, search, notifications, language control, and profile mock.
-  - `PortalSidebar`: member/employer navigation and responsive open/close state.
-  - `MemberPortalShell`: member-only shell used by claim routes. It uses `useRouter` to return to dashboard views.
+  - `PortalSidebar`: member navigation and responsive open/close state.
 - Navigation definitions live in `PortalChrome.tsx`. Add a label and matching `IconName` there when adding a sidebar item.
 
 ### Dashboard components
@@ -90,11 +82,11 @@ The quick-action order is intentionally:
 2. Past Claim Status
 3. View Passbook
 
-File a Claim is a real `next/link` link to `/claims/new`. Past Claim Status still opens the Withdraw placeholder. View Passbook opens the Money passbook. The member header's Download statement link downloads the static `public/pf-statement.pdf` as `EPFO-PF-Statement-2026-27.pdf`; it contains the minimal headers EPF Wages, EPS Wages, Employee Share, Employer Share, and Pension Share.
+File a Claim opens the Claims start tab. Past Claim Status and the dashboard medical-advance tracker open the Claims status tab; the latter selects its active claim. View Passbook opens the Passbook view. The Account Health card was intentionally removed from Home. The member header's Download statement link downloads the static `public/pf-statement.pdf` as `EPFO-PF-Statement-2026-27.pdf`; it contains the minimal headers EPF Wages, EPS Wages, Employee Share, Employer Share, and Pension Share.
 
 `app/components/Passbook.tsx` is the member passbook. It has native Member ID and financial-year selects: the current Infosys ID plus a Techcore past-member ID. The selected account determines available years and its static ledger. A clean four-column table exposes the two transaction types through their attributes—date, particulars, credit, and debit—while the summary calculates opening, credit, debit, and closing totals. `passbook-data.ts` holds the sample ledgers and pure `passbookTotals` helper; `passbook-data.test.mjs` verifies their balances. Use static prototype data until a secure account API is designed. `passbook.module.css` keeps the table responsive with horizontal scrolling on narrow screens.
 
-`app/components/EmployerDashboard.tsx` contains employer stat, filing, task, and activity cards. It is still mock-only and has no form submissions.
+`app/components/EmployerDashboard.tsx` remains an unused mock component until a separate employer route is requested.
 
 `app/components/Icon.tsx` contains the inline SVG path registry. Use an existing `IconName` before adding another icon. `LanguageSwitch.tsx` uses `LanguageProvider` to switch between English and Romanized Hindi.
 
@@ -120,7 +112,7 @@ File a Claim is a real `next/link` link to `/claims/new`. Past Claim Status stil
 
 ### Files
 
-- `app/claims/new/ClaimFlow.tsx`: interactive four-step UI.
+- `app/claims/new/ClaimFlow.tsx`: interactive four-step UI embedded by `ClaimsWorkspace`.
 - `app/claims/new/claim.ts`: types, constants, mock details, legacy-form mapping, and pure step validation.
 - `app/claims/new/claim-flow.module.css`: route-scoped layout and responsive styling.
 - `app/claims/new/claim.test.mjs`: minimal Node test covering every branch and the OTP gate.
@@ -183,7 +175,7 @@ PF advance requires:
 
 Final settlement requires one tax declaration value: Not applicable, Form 15G, or Form 15H.
 
-Pension benefit requires one radio choice: Withdrawal benefit or Scheme certificate.
+Pension benefit requires one radio choice: Pension claim benefit or Scheme certificate.
 
 No official eligibility limits, document uploads, tax calculations, or service-duration rules are implemented.
 
@@ -194,8 +186,7 @@ No official eligibility limits, document uploads, tax calculations, or service-d
 - Send OTP only toggles the local `otpSent` state and reveals the OTP input.
 - OTP accepts digits only, is truncated to six characters, and validates against exactly six digits.
 - Any six digits are accepted. No demo OTP is displayed and no network request occurs.
-- Successful submit replaces the wizard with a confirmation view containing reference `CLM-20260824-001` and the mapped legacy form.
-- The success CTA returns to `/`.
+- Successful submit creates an in-memory record with reference `CLM-20260825-001`, then returns to the selected Claim status detail. `claims-data.ts` contains the mock history and `claims-data.test.mjs` checks submitted-record creation.
 
 ### Accessibility behavior
 
@@ -227,7 +218,7 @@ Do not mistake simulated UI for production integration:
 - No claim persistence, idempotency, retry handling, or audit trail.
 - No document upload or Form 15G/15H file handling.
 - No generated Form 31/19/10C PDF; only an in-memory mapping and review summary.
-- No Past Claim Status implementation; the dashboard card still opens a placeholder.
+- Claim history is representative in-memory mock data. New submissions disappear after a reload and are not connected to EPFO.
 
 If real submission is requested, treat it as a new backend/security project. Do not convert the prototype submit button into a network call without defined authentication, API contracts, server validation, error behavior, and data-handling requirements.
 
@@ -239,7 +230,7 @@ Run these after claim, routing, language, or shell changes:
 npm run lint
 npx next typegen
 npx tsc --noEmit
-node --experimental-strip-types --test app/claims/new/claim.test.mjs app/components/passbook-data.test.mjs
+node --experimental-strip-types --test app/claims/new/claim.test.mjs app/components/passbook-data.test.mjs app/components/claims-data.test.mjs
 npx next build --webpack
 ```
 
@@ -250,7 +241,7 @@ Notes:
 - The default Turbopack production build may panic in restricted environments while binding an internal worker port. `npx next build --webpack` is the verified fallback.
 - The latest completed checks passed ESLint, route type generation, strict TypeScript, the claim branch test, `git diff --check`, and a production webpack build.
 - The verified production route table showed `/` as dynamic and `/claims/new` as statically prerendered.
-- Visual browser QA of `/claims/new` is still pending because no in-app or connected browser was available during implementation.
+- Visual browser QA of the Claims workspace is still pending because no in-app or connected browser was available during implementation.
 
 ## Current worktree and ownership
 

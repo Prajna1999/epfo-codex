@@ -25,7 +25,7 @@ export const initialClaim: ClaimDraft = {
 };
 
 export const claimTypes = [
-  { value: "advance", label: "PF advance", description: "Withdraw part of your PF for an eligible need", form: "Form 31" },
+  { value: "advance", label: "PF advance", description: "Claim part of your PF for an eligible need", form: "Form 31" },
   { value: "settlement", label: "Final PF settlement", description: "Settle your PF after leaving employment", form: "Form 19" },
   { value: "pension", label: "Pension benefit", description: "Request an EPS benefit or scheme certificate", form: "Form 10C" },
 ] as const;

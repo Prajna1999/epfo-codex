@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Icon } from "../../components/Icon";
 import { useLanguage } from "../../language";
@@ -9,16 +8,15 @@ import { canContinue, claimTypes, initialClaim, legacyForm, memberDetails, purpo
 
 const steps = ["Choose claim", "Confirm details", "Claim questions", "Review and submit"];
 
-export function ClaimFlow() {
+export function ClaimFlow({ onSubmitted }: { onSubmitted: (claim: ClaimDraft) => void }) {
   const { t } = useLanguage();
   const [step, setStep] = useState(1);
   const [claim, setClaim] = useState<ClaimDraft>(initialClaim);
   const [otpSent, setOtpSent] = useState(false);
   const [error, setError] = useState("");
-  const [submitted, setSubmitted] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
-  useEffect(() => headingRef.current?.focus(), [step, submitted]);
+  useEffect(() => headingRef.current?.focus(), [step]);
 
   const update = <K extends keyof ClaimDraft>(key: K, value: ClaimDraft[K]) => {
     setClaim((current) => ({ ...current, [key]: value }));
@@ -38,16 +36,13 @@ export function ClaimFlow() {
       return;
     }
     if (step < 4) setStep((current) => current + 1);
-    else setSubmitted(true);
+    else onSubmitted(claim);
   };
-
-  if (submitted) return <Success claim={claim} headingRef={headingRef} />;
 
   return (
     <div className={styles.page}>
-      <Link href="/" className={styles.back}><Icon name="arrow" size={16} /> {t("Back to dashboard")}</Link>
       <header className={styles.heading}>
-        <p className="eyebrow">{t("WITHDRAWAL")}</p>
+        <p className="eyebrow">{t("CLAIMS")}</p>
         <h1 ref={headingRef} tabIndex={-1}>{t("Submit a claim")}</h1>
         <p>{t("Answer only what is needed. We’ll prepare the right EPFO form for you.")}</p>
       </header>
@@ -133,7 +128,7 @@ function ClaimQuestions({ claim, update }: { claim: ClaimDraft; update: <K exten
       )}
       {claim.type === "pension" && (
         <div className={styles.inlineChoices}>
-          {["Withdrawal benefit", "Scheme certificate"].map((choice) => <label key={choice} className={claim.pensionChoice === choice ? styles.selected : ""}><input type="radio" name="pensionChoice" checked={claim.pensionChoice === choice} onChange={() => update("pensionChoice", choice)} /><span><strong>{t(choice)}</strong><small>{t(choice === "Withdrawal benefit" ? "Receive the eligible pension withdrawal amount" : "Preserve your pension service for the future")}</small></span></label>)}
+          {["Pension claim benefit", "Scheme certificate"].map((choice) => <label key={choice} className={claim.pensionChoice === choice ? styles.selected : ""}><input type="radio" name="pensionChoice" checked={claim.pensionChoice === choice} onChange={() => update("pensionChoice", choice)} /><span><strong>{t(choice)}</strong><small>{t(choice === "Pension claim benefit" ? "Receive the eligible pension claim amount" : "Preserve your pension service for the future")}</small></span></label>)}
         </div>
       )}
     </fieldset>
@@ -160,19 +155,5 @@ function Review({ claim, otpSent, onSendOtp, update }: { claim: ClaimDraft; otpS
         {!otpSent ? <button type="button" className={styles.secondary} onClick={onSendOtp}>{t("Send OTP")}</button> : <label><span>{t("6-digit OTP")}</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={claim.otp} onChange={(event) => update("otp", event.target.value.replace(/\D/g, "").slice(0, 6))} /></label>}
       </div>
     </fieldset>
-  );
-}
-
-function Success({ claim, headingRef }: { claim: ClaimDraft; headingRef: React.RefObject<HTMLHeadingElement | null> }) {
-  const { t } = useLanguage();
-  return (
-    <section className={styles.success}>
-      <span><Icon name="shield" size={30} /></span>
-      <p className="eyebrow">{t("CLAIM SUBMITTED")}</p>
-      <h1 ref={headingRef} tabIndex={-1}>{t("Your claim has been submitted")}</h1>
-      <p>{t("EPFO will review your claim. You can track its progress from Past Claim Status.")}</p>
-      <dl><div><dt>{t("Claim reference")}</dt><dd>CLM-20260824-001</dd></div><div><dt>{t("EPFO form")}</dt><dd>{legacyForm(claim.type)}</dd></div></dl>
-      <Link href="/" className={styles.primary}>{t("Back to dashboard")}</Link>
-    </section>
   );
 }

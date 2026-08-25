@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useLanguage } from "../language";
 import { Icon, type IconName } from "./Icon";
 import { LanguageSwitch } from "./LanguageSwitch";
@@ -11,9 +10,9 @@ export type PortalType = "member" | "employer";
 const navigation = {
   member: [
     { label: "Home", icon: "home" },
-    { label: "Money", icon: "book" },
+    { label: "Claims", icon: "claim" },
+    { label: "Passbook", icon: "book" },
     { label: "Employment", icon: "briefcase" },
-    { label: "Withdraw", icon: "claim" },
     { label: "Account", icon: "user" },
   ],
   employer: [
@@ -80,26 +79,5 @@ export function PortalSidebar({ type, activeNav, mobileOpen, onNavigate, onClose
         <Icon name="arrow" size={16} />
       </div>
     </aside>
-  );
-}
-
-export function MemberPortalShell({ children }: { children: ReactNode }) {
-  const { t } = useLanguage();
-  const router = useRouter();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const navigate = (item: string) => router.push(item === "Home" ? "/" : `/?view=${encodeURIComponent(item)}`);
-
-  return (
-    <main className="app-shell">
-      <PortalTopbar mobileOpen={mobileOpen} onToggleMobile={() => setMobileOpen(!mobileOpen)} />
-      <PortalSidebar type="member" activeNav="Withdraw" mobileOpen={mobileOpen} onNavigate={navigate} onClose={() => setMobileOpen(false)} />
-      <section className="content">
-        <div className="context-strip">
-          <span className="verified-pill"><Icon name="shield" size={15} /> {t("Aadhaar verified")}</span>
-          <span className="verified-pill">{t("Personal account")}: <strong>{t("My retirement account")}</strong></span>
-        </div>
-        {children}
-      </section>
-    </main>
   );
 }

@@ -10,14 +10,11 @@ type Navigate = (item: string) => void;
 export function MemberDashboard({ onNavigate }: { onNavigate: Navigate }) {
   return (
     <>
-      <section className="member-hero">
-        <BalanceCard />
-        <AccountHealthCard onNavigate={onNavigate} />
-      </section>
+      <BalanceCard />
       <ServicesSection onNavigate={onNavigate} />
       <section className="dashboard-grid banking-grid">
         <RecentActivityCard onNavigate={onNavigate} />
-        <ClaimStatusCard onNavigate={onNavigate} />
+        <ClaimStatusCard />
       </section>
     </>
   );
@@ -41,7 +38,7 @@ function BalanceCard() {
             </button>
           </div>
           <p>
-            {t("Total PF balance")} <span className="info" title={t("This is your recorded PF balance, not an immediately withdrawable amount.")}>i</span>
+            {t("Total PF balance")} <span className="info" title={t("This is your recorded PF balance, not an immediately claimable amount.")}>i</span>
           </p>
           <h2>₹4,52,340<span>.00</span></h2>
           <p className="balance-caption">{t("Recorded balance · Updated 18 Aug 2026")}</p>
@@ -91,37 +88,18 @@ function CardDetail({ label, value }: { label: string; value: string }) {
   return <div className="card-detail"><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function AccountHealthCard({ onNavigate }: { onNavigate: Navigate }) {
-  const { t } = useLanguage();
-  return (
-    <aside className="health-card">
-      <div className="health-icon"><Icon name="shield" size={22} /></div>
-      <p className="eyebrow">{t("ACCOUNT HEALTH")}</p>
-      <h2>{t("Everything is on track")}</h2>
-      <p>{t("Your latest contribution arrived and your essential details are verified.")}</p>
-      <div className="health-checks">
-        <span><i>✓</i>{t("August contribution received")}</span>
-        <span><i>✓</i>{t("Aadhaar and bank verified")}</span>
-        <span><i>✓</i>{t("Nominee registered")}</span>
-        <span><i>✓</i>{t("Previous PF transferred")}</span>
-      </div>
-      <button onClick={() => onNavigate("Account")}>{t("View account health")} <Icon name="arrow" size={15} /></button>
-    </aside>
-  );
-}
-
 function ServicesSection({ onNavigate }: { onNavigate: Navigate }) {
   const { t } = useLanguage();
   return (
     <section className="quick-section">
       <div className="section-heading">
-        <h2>{t("Move and manage your money")}</h2>
+        <h2>{t("Manage your claims and passbook")}</h2>
         <span>{t("Official EPFO services, in plain language")}</span>
       </div>
       <div className="quick-grid three">
-        <ServiceCard icon="claim" title={t("File a Claim")} text={t("Start a new PF claim")} href="/claims/new" />
-        <ServiceCard icon="file" title={t("Past Claim Status")} text={t("Track your previous claims")} onClick={() => onNavigate("Withdraw")} />
-        <ServiceCard icon="book" title={t("View Passbook")} text={t("See every contribution and credit")} onClick={() => onNavigate("Money")} />
+        <ServiceCard icon="claim" title={t("File a Claim")} text={t("Start a new PF claim")} href="/?view=Claims&tab=start" />
+        <ServiceCard icon="file" title={t("Past Claim Status")} text={t("Track your previous claims")} href="/?view=Claims&tab=status" />
+        <ServiceCard icon="book" title={t("View Passbook")} text={t("See every contribution and credit")} onClick={() => onNavigate("Passbook")} />
       </div>
     </section>
   );
@@ -141,8 +119,8 @@ function RecentActivityCard({ onNavigate }: { onNavigate: Navigate }) {
   return (
     <article className="panel transactions-panel">
       <div className="panel-head">
-        <div><p className="eyebrow">{t("MONEY")}</p><h2>{t("Recent activity")}</h2></div>
-        <button onClick={() => onNavigate("Money")}>{t("View all transactions")} <Icon name="arrow" size={15} /></button>
+        <div><p className="eyebrow">{t("PASSBOOK")}</p><h2>{t("Recent activity")}</h2></div>
+        <button onClick={() => onNavigate("Passbook")}>{t("View all transactions")} <Icon name="arrow" size={15} /></button>
       </div>
       <Transaction icon="building" title={t("August contribution")} detail="Infosys Limited · 18 Aug 2026" amount="+ ₹8,430" />
       <Transaction icon="building" title={t("July contribution")} detail="Infosys Limited · 18 Jul 2026" amount="+ ₹8,430" />
@@ -163,12 +141,12 @@ function Transaction({ icon, title, detail, amount }: { icon: IconName; title: s
   );
 }
 
-function ClaimStatusCard({ onNavigate }: { onNavigate: Navigate }) {
+function ClaimStatusCard() {
   const { t } = useLanguage();
   return (
     <article className="panel claim-panel">
       <div className="panel-head">
-        <div><p className="eyebrow">{t("WITHDRAWAL")}</p><h2>{t("Medical advance")}</h2></div>
+        <div><p className="eyebrow">{t("CLAIMS")}</p><h2>{t("Medical advance")}</h2></div>
         <span className="status processing">{t("In review")}</span>
       </div>
       <strong className="claim-amount">₹35,000</strong>
@@ -179,7 +157,7 @@ function ClaimStatusCard({ onNavigate }: { onNavigate: Navigate }) {
         <Icon name="shield" size={18} />
         <span><strong>{t("No action needed.")}</strong> {t("EPFO is reviewing your request. Your employer verification is complete.")}</span>
       </div>
-      <button className="text-button" onClick={() => onNavigate("Withdraw")}>{t("Track withdrawal")} <Icon name="arrow" size={15} /></button>
+      <Link className="text-button" href="/?view=Claims&tab=status&claim=CLM-20260812-035">{t("Track claim")} <Icon name="arrow" size={15} /></Link>
     </article>
   );
 }
