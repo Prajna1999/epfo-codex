@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useLanguage } from "../language";
 import { Icon, type IconName } from "./Icon";
 
-type Navigate = (item: string) => void;
+type Navigate = (item: string, tab?: "start" | "status", claimId?: string) => void;
 
 export function MemberDashboard({ onNavigate }: { onNavigate: Navigate }) {
   return (
@@ -14,7 +13,7 @@ export function MemberDashboard({ onNavigate }: { onNavigate: Navigate }) {
       <ServicesSection onNavigate={onNavigate} />
       <section className="dashboard-grid banking-grid">
         <RecentActivityCard onNavigate={onNavigate} />
-        <ClaimStatusCard />
+        <ClaimStatusCard onNavigate={onNavigate} />
       </section>
     </>
   );
@@ -93,25 +92,21 @@ function ServicesSection({ onNavigate }: { onNavigate: Navigate }) {
   return (
     <section className="quick-section">
       <div className="section-heading">
-        <h2>{t("Manage your claims and passbook")}</h2>
+        <h2>{t("Most used actions")}</h2>
         <span>{t("Official EPFO services, in plain language")}</span>
       </div>
       <div className="quick-grid three">
-        <ServiceCard icon="claim" title={t("File a Claim")} text={t("Start a new PF claim")} href="/?view=Claims&tab=start" />
-        <ServiceCard icon="file" title={t("Past Claim Status")} text={t("Track your previous claims")} href="/?view=Claims&tab=status" />
+        <ServiceCard icon="claim" title={t("File a Claim")} text={t("Start a new PF claim")} onClick={() => onNavigate("Claims", "start")} />
+        <ServiceCard icon="file" title={t("Past Claim Status")} text={t("Track your previous claims")} onClick={() => onNavigate("Claims", "status")} />
         <ServiceCard icon="book" title={t("View Passbook")} text={t("See every contribution and credit")} onClick={() => onNavigate("Passbook")} />
       </div>
     </section>
   );
 }
 
-function ServiceCard({ icon, title, text, href, onClick }: { icon: IconName; title: string; text: string; href?: string; onClick?: () => void }) {
+function ServiceCard({ icon, title, text, onClick }: { icon: IconName; title: string; text: string; onClick: () => void }) {
   const content = <><span><Icon name={icon} /></span><div><strong>{title}</strong><small>{text}</small></div><Icon name="arrow" size={17} /></>;
-  return href ? <Link className="action-card" href={href}>{content}</Link> : (
-    <button className="action-card" onClick={onClick} type="button">
-      {content}
-    </button>
-  );
+  return <button className="action-card" onClick={onClick} type="button">{content}</button>;
 }
 
 function RecentActivityCard({ onNavigate }: { onNavigate: Navigate }) {
@@ -141,7 +136,7 @@ function Transaction({ icon, title, detail, amount }: { icon: IconName; title: s
   );
 }
 
-function ClaimStatusCard() {
+function ClaimStatusCard({ onNavigate }: { onNavigate: Navigate }) {
   const { t } = useLanguage();
   return (
     <article className="panel claim-panel">
@@ -157,7 +152,7 @@ function ClaimStatusCard() {
         <Icon name="shield" size={18} />
         <span><strong>{t("No action needed.")}</strong> {t("EPFO is reviewing your request. Your employer verification is complete.")}</span>
       </div>
-      <Link className="text-button" href="/?view=Claims&tab=status&claim=CLM-20260812-035">{t("Track claim")} <Icon name="arrow" size={15} /></Link>
+      <button className="text-button" type="button" onClick={() => onNavigate("Claims", "status", "CLM-20260812-035")}>{t("Track claim")} <Icon name="arrow" size={15} /></button>
     </article>
   );
 }

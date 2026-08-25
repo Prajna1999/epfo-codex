@@ -13,7 +13,7 @@ const navigation = {
     { label: "Claims", icon: "claim" },
     { label: "Passbook", icon: "book" },
     { label: "Employment", icon: "briefcase" },
-    { label: "Account", icon: "user" },
+    { label: "Services", icon: "shield" },
   ],
   employer: [
     { label: "Overview", icon: "home" },
@@ -26,7 +26,7 @@ const navigation = {
   ],
 } satisfies Record<PortalType, { label: string; icon: IconName }[]>;
 
-export function PortalTopbar({ mobileOpen, onToggleMobile }: { mobileOpen: boolean; onToggleMobile: () => void }) {
+export function PortalTopbar({ mobileOpen, onToggleMobile, onOpenAccount }: { mobileOpen: boolean; onToggleMobile: () => void; onOpenAccount: () => void }) {
   const { t } = useLanguage();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   return (
@@ -49,7 +49,7 @@ export function PortalTopbar({ mobileOpen, onToggleMobile }: { mobileOpen: boole
           </section>}
         </div>
         <LanguageSwitch />
-        <button className="profile-button">
+        <button className="profile-button" type="button" onClick={onOpenAccount} aria-label={t("View profile details")}>
           <span className="avatar">RP</span>
           <span className="profile-copy"><strong>Rahul Patil</strong><small>{t("Verified account")}</small></span>
           <Icon name="chevron" size={16} />

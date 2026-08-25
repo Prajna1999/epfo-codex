@@ -40,9 +40,9 @@ function ClaimStatus({ claims, selected, onSelect }: { claims: ClaimRecord[]; se
   return (
     <div className={styles.statusLayout}>
       <section className={styles.list} aria-label={t("Past claims")}>
-        <div className={styles.sectionHead}><div><p className="eyebrow">{t("CLAIMS")}</p><h2>{t("Your claims")}</h2></div><span>{claims.length}</span></div>
+        <div className={styles.sectionHead}><div><p className="eyebrow">{t("CLAIMS")}</p><h2>{t("Your requests")}</h2></div><span>{claims.length}</span></div>
         {claims.map((claim) => <button key={claim.id} type="button" className={claim.id === selected.id ? styles.selected : ""} onClick={() => onSelect(claim.id)}>
-          <span><strong>{t(claim.type)}</strong><small>{t("Submitted")} {claim.submitted}</small></span><b>{claim.amount}</b><i className={claim.status === "Paid" ? styles.paid : ""}>{t(claim.status)}</i>
+          <span><strong>{t(claim.type)}</strong><small>{t(claim.status === "Transferred" ? "Requested" : "Submitted")} {claim.submitted}</small></span><b>{claim.amount}</b><i className={claim.status === "Paid" || claim.status === "Transferred" ? styles.paid : ""}>{t(claim.status)}</i>
         </button>)}
       </section>
       <section className={styles.detail} aria-live="polite">

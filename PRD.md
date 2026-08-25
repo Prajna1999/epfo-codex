@@ -2,20 +2,16 @@
 
 ## 1. Objective
 
-Build a **single, unified EPFO digital platform** where a person logs in once and the platform determines all their EPFO relationships.
+Build a **role-appropriate EPFO digital platform** with separate sign-in routes for members, employers, and CA users.
 
-The user should not need to understand whether they are entering through:
+Each route should make its audience clear:
 
 * Member Sign In
 * Employer Sign In
 * Establishment Sign In
 * Principal Employer Sign In
 
-Instead:
-
-> **Login once → see your contexts → choose what you're acting as → access the relevant services.**
-
-Note: today "Employer Sign In" and "Establishment Sign In" are two tabs on the same login box on the Unified Employer Portal, and Principal Employer functions sit *inside* an establishment's login. This platform collapses all of them into one entry point.
+The member portal is a single personal account experience; it does not contain an account-context switcher. Employer and CA portals are separate experiences when implemented.
 
 ---
 
@@ -82,17 +78,17 @@ Employer registration originates on the Shram Suvidha Portal, which issues the c
 
 ---
 
-# 3. Unified Login
+# 3. Role-Specific Entry
 
 ### User experience
 
-The user visits:
+The user begins from the route matching the work they need to do:
 
-**EPFO → Sign In**
+* **Member sign in** → personal UAN dashboard.
+* **Employer sign in** → establishment operations.
+* **CA sign in** → delegated employer operations.
 
-They authenticate using the appropriate supported authentication mechanism. Authentication must resolve to an Aadhaar-verified person, since context resolution depends on it.
-
-The platform then resolves their relationships.
+Each route uses its appropriate authentication and authorization model. A member who also has employer responsibilities signs in through the employer or CA route; the member portal does not expose account switching.
 
 ### Example: ordinary employee
 
@@ -111,66 +107,9 @@ Member Dashboard
 
 No context-selection screen is necessary.
 
-### Example: person with multiple contexts
+# 4. Separate Role Experiences
 
-Suppose Rahul is:
-
-* A PF member at Tata Motors
-* CA for ABC Pvt Ltd
-* Authorized Signatory for his own company
-
-After authentication:
-
-```text
-Rahul
- │
- ▼
-EPFO
- │
- ▼
-Your EPFO profiles
- │
- ├── 👤 Member
- │     UAN: XXXX1234
- │
- ├── 🏢 ABC Pvt Ltd
- │     Role: CA
- │
- └── 🏢 XYZ Consulting
-       Role: Authorized Signatory
-```
-
-Rahul selects the context he wants to operate in.
-
----
-
-# 4. Multiple Contexts
-
-A user can have **multiple simultaneous EPFO relationships**.
-
-The system should never force the user to maintain separate accounts for each relationship.
-
-### Context examples
-
-| User              | Context           | Role                 |
-| ----------------- | ----------------- | -------------------- |
-| Employee          | UAN 1234          | Member               |
-| HR manager        | ABC Ltd           | Delegated User       |
-| Director          | XYZ Ltd           | Authorized Signatory |
-| CA                | ABC Ltd           | Delegated User       |
-| Corporate officer | Large Corp        | Authorized Signatory / Delegated User, with Principal Employer capability |
-| Government dept   | PAN-registered PE | Principal Employer   |
-| Employee + CA     | Multiple contexts | Multiple roles       |
-
-### Context switcher
-
-The selected context should remain visible throughout the application:
-
-> **Acting as: ABC Pvt Ltd · CA**
-
-The user should be able to switch context without logging out.
-
-Sensitive actions should require confirmation when switching context.
+The platform may resolve a person's member and employer relationships internally, but it presents them through separate sign-in routes and route-specific shells. This keeps the high-frequency member experience focused on a single UAN while employer and CA users get the authorization, establishment, and extension scope they need.
 
 ---
 
@@ -200,8 +139,11 @@ Employment
 • Previous employer
 • Previous employer
 
-Quick Actions
-[Passbook] [Claim] [KYC] [Nomination]
+Most used
+[File a claim] [Track claims] [Passbook]
+
+Services
+[KYC & bank details] [Nomination] [Transfer previous PF] [Profile details]
 ```
 
 ### Member services
@@ -240,7 +182,7 @@ Instead of:
 
 prefer:
 
-> **Withdraw / Claim PF**
+> **Claim PF**
 
 The underlying forms remain visible when legally/operationally necessary.
 
@@ -475,92 +417,24 @@ For a PAN-registered government body, it appears as its own context.
 
 ---
 
-# 10. Multiple-Context UX
+# 10. Role-Specific UX
 
-This is one of the most important product features.
-
-### Example
-
-Rahul has:
+The member portal remains a single-account experience:
 
 ```text
-👤 Member
+Rahul Patil
 UAN XXXX1234
 
-🏢 ABC Pvt Ltd
-CA
-
-🏢 XYZ Ltd
-Authorized Signatory
-
-🏢 Tata Motors
-Authorized Signatory · includes contractor compliance
+Home · Claims · Passbook · Employment · Services · Account
 ```
 
-After login:
-
-```text
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Good morning, Rahul
-
-What would you like to access?
-
-👤 My PF
-   Member · UAN XXXX1234
-
-🏢 ABC Pvt Ltd
-   CA
-
-🏢 XYZ Ltd
-   Authorized Signatory
-
-🏢 Tata Motors
-   Authorized Signatory
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-After selecting **ABC Pvt Ltd**:
-
-```text
-ABC Pvt Ltd
-CA
-
-Dashboard
-Employees
-ECR
-Payments
-Reports
-```
-
-The context remains visible.
+Employer and CA routes show the selected establishment, role, and extension scope within their own shells. They do not appear as options in member navigation.
 
 ---
 
-# 11. Context Switching
+# 11. Sensitive Operations
 
-A persistent context switcher should be available:
-
-```text
-┌──────────────────────────────┐
-│ Acting as: ABC Pvt Ltd · CA ▼│
-└──────────────────────────────┘
-```
-
-Clicking it:
-
-```text
-Switch context
-
-👤 My PF
-🏢 ABC Pvt Ltd · CA
-🏢 XYZ Ltd · Authorized Signatory
-🏢 Tata Motors · Authorized Signatory
-🏛 Ministry Dept · Principal Employer (PAN)
-```
-
-Switching context should **not require another login**.
-
-For high-risk operations, the system can require:
+High-risk operations within each role-specific route can require:
 
 * MFA
 * Re-authentication
@@ -704,19 +578,11 @@ Job identifiers must reconcile with the TRRN issued for challan payment rather t
 
 # 15. UX Principles
 
-### One account
+### Clear role entry
 
-Users should not maintain separate Member/Employer/Principal Employer credentials where the same person can have multiple relationships.
+Make it clear whether the person is entering the Member, Employer, or CA route. The member route should never ask a typical UAN holder to choose an account context.
 
-### Context first
-
-Always make it obvious:
-
-> **Who am I acting as?**
-
-And, where extensions exist:
-
-> **Which branch am I acting on?**
+Employer and CA routes must still make establishment and extension scope obvious.
 
 ### Progressive complexity
 
@@ -732,9 +598,9 @@ Establishments that engage contractors see contractor compliance.
 
 Use human-readable labels and expose EPFO form numbers/codes only where useful.
 
-### No unnecessary logins
+### No unnecessary choices
 
-Context switching should normally be instant.
+Keep role selection at entry, not inside the member portal.
 
 ### Strong confirmation for irreversible actions
 

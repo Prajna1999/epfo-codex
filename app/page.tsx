@@ -1,6 +1,6 @@
 import { Portal } from "./components/Portal";
 
-const memberViews = ["Home", "Claims", "Passbook", "Employment", "Account"];
+const memberViews = ["Home", "Claims", "Passbook", "Employment", "Services", "Account"];
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ view?: string | string[]; tab?: string | string[]; claim?: string | string[] }> }) {
   const { view, tab, claim } = await searchParams;

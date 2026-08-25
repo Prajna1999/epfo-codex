@@ -33,19 +33,19 @@ This is currently a frontend prototype. There is no backend, database, authentic
 The unified dashboard route.
 
 - `app/page.tsx` awaits `searchParams`, validates `view`, and passes the result as `initialNav` to `Portal`.
-- Allowed member query values are `Home`, `Claims`, `Passbook`, `Employment`, and `Account`.
+- Allowed member query values are `Home`, `Claims`, `Passbook`, `Employment`, `Services`, and `Account`.
 - Missing, repeated, or unknown values fall back to `Home`.
 - Example: `/?view=Passbook` opens the member passbook.
 - Because the route reads `searchParams`, the production build reports `/` as dynamically rendered.
 
 ### Claims
 
-- `/?view=Claims&tab=start` is the canonical start-claim view and `/?view=Claims&tab=status` is the claim-history view; `claim` selects a history record.
+- `/?view=Claims&tab=start` is the canonical start-claim view and `/?view=Claims&tab=status` is the claim-history view; `claim` selects a history record, including the completed mock PF transfer.
 - `app/components/ClaimsWorkspace.tsx` embeds the guided `ClaimFlow` alongside compact, static claim history and a selected progress timeline.
 - There is no standalone claims route; the dashboard Claims workspace is the only member claims entry point.
 - The sidebar uses the member-facing **Claims** label.
 
-No dedicated route currently exists for employment details, account settings, or employer subsections. Those continue to use dashboard placeholder views. The passbook is an in-dashboard Passbook view.
+No dedicated route currently exists for account settings or employer subsections. The passbook, employment history, claims, and Services are in-dashboard views.
 
 ## Application composition
 
@@ -57,32 +57,35 @@ No dedicated route currently exists for employment details, account settings, or
 
 ### Portal state and chrome
 
-- `app/components/Portal.tsx` is a fixed member portal. It owns `activeNav`, Claims-tab state, and mobile-sidebar visibility.
-- Home renders `MemberDashboard`, Claims renders `ClaimsWorkspace`, Passbook renders `Passbook`, Employment renders `EmploymentHistory`, and Account uses `PlaceholderView`.
+- `app/components/Portal.tsx` is a fixed member portal. It owns mobile-sidebar visibility and one `useRouter` navigation function shared by the sidebar and member-dashboard cards.
+- Home renders `MemberDashboard`, Claims renders `ClaimsWorkspace`, Passbook renders `Passbook`, Employment renders `EmploymentHistory`, Services renders `Services`, and Account renders `AccountProfile`.
 - `app/components/PortalChrome.tsx` owns reusable structural UI:
-  - `PortalTopbar`: branding, search, notifications, language control, and profile mock.
-  - `PortalSidebar`: member navigation and responsive open/close state.
+- `PortalTopbar`: branding, search, notifications, language control, and profile mock.
+- `PortalSidebar`: member navigation and responsive open/close state.
 - Navigation definitions live in `PortalChrome.tsx`. Add a label and matching `IconName` there when adding a sidebar item.
+
+Account is intentionally not in the member sidebar. The top-right Rahul Patil profile control opens the read-only `AccountProfile` view, which displays core EPFO personal and contact details. Corrections remain in Services via joint declaration.
 
 ### Dashboard components
 
 `app/components/MemberDashboard.tsx` contains these named sections/components:
 
 - `BalanceCard`: PF balance front face and UAN identity-card back face.
-- `AccountHealthCard`: verified account health checklist.
 - `PortalTopbar`: its bell opens the latest Infosys contribution notification; the summary is intentionally not duplicated in the dashboard body.
 - `ServicesSection` and `ServiceCard`: member quick actions.
 - `RecentActivityCard`: recent contribution transactions.
 - `ClaimStatusCard`: current medical advance progress.
 - `EmploymentHistory.tsx`: sidebar Employment view. It owns the connected-line display from Techcore Systems (transferred) to Infosys Limited (active); it is intentionally not shown on Home.
 
-The quick-action order is intentionally:
+The Home quick-action order is intentionally:
 
 1. File a Claim
 2. Past Claim Status
 3. View Passbook
 
 File a Claim opens the Claims start tab. Past Claim Status and the dashboard medical-advance tracker open the Claims status tab; the latter selects its active claim. View Passbook opens the Passbook view. The Account Health card was intentionally removed from Home. The member header's Download statement link downloads the static `public/pf-statement.pdf` as `EPFO-PF-Statement-2026-27.pdf`; it contains the minimal headers EPF Wages, EPS Wages, Employee Share, Employer Share, and Pension Share.
+
+`Services.tsx` is the low-frequency account-maintenance overview: KYC/bank, contact details, nomination, Aadhaar-first profile updates, previous-PF transfer, and UAN card. The four update services use a local two-step request flow and session-only request-status tracker; profile updates show employer/EPFO review only as a validation fallback. Transfer opens the existing Claims tracking detail and the UAN card returns Home. Do not add network submission without a secure backend service, authentication, document handling, OTP/e-sign, and employer/EPFO approval contracts.
 
 `app/components/Passbook.tsx` is the member passbook. It has native Member ID and financial-year selects: the current Infosys ID plus a Techcore past-member ID. The selected account determines available years and its static ledger. A clean four-column table exposes the two transaction types through their attributes—date, particulars, credit, and debit—while the summary calculates opening, credit, debit, and closing totals. `passbook-data.ts` holds the sample ledgers and pure `passbookTotals` helper; `passbook-data.test.mjs` verifies their balances. Use static prototype data until a secure account API is designed. `passbook.module.css` keeps the table responsive with horizontal scrolling on narrow screens.
 
