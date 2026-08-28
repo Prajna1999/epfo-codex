@@ -1,0 +1,7 @@
+@keyframes slide-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slide-from-right{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:translateX(0)}}
+.page-enter,.slide-in,.contribution-notification,.login-card>.login-form,.login-card>.login-loading,.recovery-complete{animation:slide-in .24s ease-out both}
+aside[role="dialog"]{animation:slide-from-right .24s ease-out both}
+.account-menu{position:relative}.account-hover{position:absolute;top:calc(100% + 10px);right:0;z-index:50;display:grid;gap:5px;width:210px;padding:14px;border:1px solid var(--line);border-radius:14px;background:#fff;box-shadow:0 14px 35px #1822371f;opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .16s ease,transform .16s ease}.account-hover strong{color:var(--navy);font-size:11px}.account-hover span{color:var(--muted);font-size:10px}.account-hover button,.profile-logout{margin-top:7px;border:0;border-radius:9px;background:var(--navy);color:#fff;font-size:10px;font-weight:800;cursor:pointer}.account-hover button{height:34px}.profile-logout{margin:0 0 0 auto;padding:9px 12px}.account-menu:hover .account-hover,.account-menu:focus-within .account-hover{opacity:1;transform:translateY(0);pointer-events:auto}
+@media(max-width:480px){.profile-logout{margin-top:12px;margin-left:0}.identity{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){.page-enter,.slide-in,.contribution-notification,.login-card>.login-form,.login-card>.login-loading,.recovery-complete,aside[role="dialog"]{animation:none}}

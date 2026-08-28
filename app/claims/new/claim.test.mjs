@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canContinue, initialClaim, legacyForm } from "./claim.ts";
+import { canContinue, hasValidBankDetails, initialClaim, legacyForm } from "./claim.ts";
 
 test("validates every claim branch and final OTP", () => {
   const base = { ...initialClaim, detailsConfirmed: true };
@@ -11,7 +11,11 @@ test("validates every claim branch and final OTP", () => {
   assert.equal(canContinue(3, advance), true);
   assert.equal(canContinue(3, settlement), true);
   assert.equal(canContinue(3, pension), true);
-  assert.equal(canContinue(4, { ...advance, bankConfirmed: true, otp: "123456" }, true), true);
-  assert.equal(canContinue(4, { ...advance, bankConfirmed: true, otp: "12345" }, true), false);
+  const verifiedBank = { ...advance, bankAccount: "50200076543210", ifsc: "HDFC0001234", bankVerified: true, otp: "123456" };
+  assert.equal(hasValidBankDetails(verifiedBank), true);
+  assert.equal(canContinue(4, verifiedBank, true), true);
+  assert.equal(canContinue(4, { ...verifiedBank, bankVerified: false }, true), false);
+  assert.equal(canContinue(4, { ...verifiedBank, ifsc: "HDFC123" }, true), false);
+  assert.equal(canContinue(4, { ...verifiedBank, otp: "12345" }, true), false);
   assert.deepEqual([legacyForm("advance"), legacyForm("settlement"), legacyForm("pension")], ["Form 31", "Form 19", "Form 10C"]);
 });

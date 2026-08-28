@@ -7,9 +7,9 @@ import styles from "./passbook.module.css";
 
 const formatAmount = (amount: number) => `₹${amount.toLocaleString("en-IN")}`;
 
-export function Passbook() {
+export function Passbook({ initialMemberId }: { initialMemberId?: string }) {
   const { t } = useLanguage();
-  const [memberId, setMemberId] = useState<string>(members[0].id);
+  const [memberId, setMemberId] = useState<string>(members.some((member) => member.id === initialMemberId) ? initialMemberId! : members[0].id);
   const member = members.find((item) => item.id === memberId) ?? members[0];
   const [year, setYear] = useState(member.passbooks.at(-1)?.year ?? "");
   const passbook = member.passbooks.find((item) => item.year === year) ?? member.passbooks[0];

@@ -425,7 +425,7 @@ The member portal remains a single-account experience:
 Rahul Patil
 UAN XXXX1234
 
-Home · Claims · Passbook · Employment · Services · Account
+Home · Claims · Passbook · Service history · Services · Account
 ```
 
 Employer and CA routes show the selected establishment, role, and extension scope within their own shells. They do not appear as options in member navigation.
@@ -635,7 +635,7 @@ show a clear confirmation and audit information.
 ### Phase 2 — Member
 
 * Profile
-* Employment
+* Service history
 * Passbook
 * Contributions
 * KYC

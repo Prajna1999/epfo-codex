@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useLanguage } from "../language";
 import { Icon, type IconName } from "./Icon";
 
-type Navigate = (item: string, tab?: "start" | "status", claimId?: string) => void;
+type Navigate = (item: string, tab?: "start" | "status", claimId?: string, memberId?: string, section?: string) => void;
 
 export function MemberDashboard({ onNavigate }: { onNavigate: Navigate }) {
   return (
@@ -98,7 +98,7 @@ function ServicesSection({ onNavigate }: { onNavigate: Navigate }) {
       <div className="quick-grid three">
         <ServiceCard icon="claim" title={t("File a Claim")} text={t("Start a new PF claim")} onClick={() => onNavigate("Claims", "start")} />
         <ServiceCard icon="file" title={t("Past Claim Status")} text={t("Track your previous claims")} onClick={() => onNavigate("Claims", "status")} />
-        <ServiceCard icon="book" title={t("View Passbook")} text={t("See every contribution and credit")} onClick={() => onNavigate("Passbook")} />
+        <ServiceCard icon="shield" title={t("KYC and bank details")} text="Aadhaar, PAN and bank status" onClick={() => onNavigate("Account", undefined, undefined, undefined, "kyc")} />
       </div>
     </section>
   );

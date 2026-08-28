@@ -8,7 +8,7 @@ This file is the working context for future coding sessions. Read it before expl
 
 This repository is a high-fidelity frontend prototype for a unified Employees’ Provident Fund Organisation portal. One identity can act as:
 
-- An EPFO member managing personal PF savings, employment history, withdrawals, and account details.
+- An EPFO member managing personal PF savings, service history, withdrawals, and account details.
 - An employer representative managing employees, ECR/contributions, payments, compliance, reports, and access.
 - Employer and CA users will use separate sign-in routes when those portals are implemented.
 
@@ -33,7 +33,7 @@ This is currently a frontend prototype. There is no backend, database, authentic
 The unified dashboard route.
 
 - `app/page.tsx` awaits `searchParams`, validates `view`, and passes the result as `initialNav` to `Portal`.
-- Allowed member query values are `Home`, `Claims`, `Passbook`, `Employment`, `Services`, and `Account`.
+- Allowed member query values are `Home`, `Claims`, `Passbook`, `ServiceHistory`, `Services`, and `Account`.
 - Missing, repeated, or unknown values fall back to `Home`.
 - Example: `/?view=Passbook` opens the member passbook.
 - Because the route reads `searchParams`, the production build reports `/` as dynamically rendered.
@@ -45,7 +45,7 @@ The unified dashboard route.
 - There is no standalone claims route; the dashboard Claims workspace is the only member claims entry point.
 - The sidebar uses the member-facing **Claims** label.
 
-No dedicated route currently exists for account settings or employer subsections. The passbook, employment history, claims, and Services are in-dashboard views.
+No dedicated route currently exists for account settings or employer subsections. The passbook, service history, claims, and Services are in-dashboard views.
 
 ## Application composition
 
@@ -58,7 +58,7 @@ No dedicated route currently exists for account settings or employer subsections
 ### Portal state and chrome
 
 - `app/components/Portal.tsx` is a fixed member portal. It owns mobile-sidebar visibility and one `useRouter` navigation function shared by the sidebar and member-dashboard cards.
-- Home renders `MemberDashboard`, Claims renders `ClaimsWorkspace`, Passbook renders `Passbook`, Employment renders `EmploymentHistory`, Services renders `Services`, and Account renders `AccountProfile`.
+- Home renders `MemberDashboard`, Claims renders `ClaimsWorkspace`, Passbook renders `Passbook`, ServiceHistory renders `EmploymentHistory`, Services renders `Services`, and Account renders `AccountProfile`.
 - `app/components/PortalChrome.tsx` owns reusable structural UI:
 - `PortalTopbar`: branding, search, notifications, language control, and profile mock.
 - `PortalSidebar`: member navigation and responsive open/close state.
@@ -75,7 +75,7 @@ Account is intentionally not in the member sidebar. The top-right Rahul Patil pr
 - `ServicesSection` and `ServiceCard`: member quick actions.
 - `RecentActivityCard`: recent contribution transactions.
 - `ClaimStatusCard`: current medical advance progress.
-- `EmploymentHistory.tsx`: sidebar Employment view. It owns the connected-line display from Techcore Systems (transferred) to Infosys Limited (active); it is intentionally not shown on Home.
+- `EmploymentHistory.tsx`: sidebar Service history view. It owns the connected-line display from Techcore Systems (transferred) to Infosys Limited (active); it is intentionally not shown on Home.
 
 The Home quick-action order is intentionally:
 

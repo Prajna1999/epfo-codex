@@ -8,7 +8,9 @@ export type ClaimDraft = {
   purposeDetail: string;
   taxDeclaration: string;
   pensionChoice: string;
-  bankConfirmed: boolean;
+  bankAccount: string;
+  ifsc: string;
+  bankVerified: boolean;
   otp: string;
 };
 
@@ -20,7 +22,9 @@ export const initialClaim: ClaimDraft = {
   purposeDetail: "",
   taxDeclaration: "",
   pensionChoice: "",
-  bankConfirmed: false,
+  bankAccount: "50200076543210",
+  ifsc: "HDFC0001234",
+  bankVerified: false,
   otp: "",
 };
 
@@ -52,6 +56,10 @@ export function legacyForm(type: ClaimType | "") {
   return claimTypes.find((claim) => claim.value === type)?.form ?? "";
 }
 
+export function hasValidBankDetails(claim: ClaimDraft) {
+  return /^\d{9,18}$/.test(claim.bankAccount.replace(/\s/g, "")) && /^[A-Z]{4}0[A-Z0-9]{6}$/.test(claim.ifsc);
+}
+
 export function canContinue(step: number, claim: ClaimDraft, otpSent = false) {
   if (step === 1) return Boolean(claim.type);
   if (step === 2) return claim.detailsConfirmed;
@@ -60,5 +68,5 @@ export function canContinue(step: number, claim: ClaimDraft, otpSent = false) {
     if (claim.type === "settlement") return Boolean(claim.taxDeclaration);
     return Boolean(claim.pensionChoice);
   }
-  return claim.bankConfirmed && otpSent && /^\d{6}$/.test(claim.otp);
+  return hasValidBankDetails(claim) && claim.bankVerified && otpSent && /^\d{6}$/.test(claim.otp);
 }

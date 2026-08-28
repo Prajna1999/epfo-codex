@@ -1,11 +1,12 @@
-import { Portal } from "./components/Portal";
+import { MockLogin } from "./components/MockLogin";
 
-const memberViews = ["Home", "Claims", "Passbook", "Employment", "Services", "Account"];
+const memberViews = ["Home", "Claims", "Passbook", "ServiceHistory", "Account"];
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ view?: string | string[]; tab?: string | string[]; claim?: string | string[] }> }) {
-  const { view, tab, claim } = await searchParams;
+export default async function Home({ searchParams }: { searchParams: Promise<{ view?: string | string[]; tab?: string | string[]; claim?: string | string[]; member?: string | string[]; section?: string | string[] }> }) {
+  const { view, tab, claim, member, section } = await searchParams;
   const initialNav = typeof view === "string" && memberViews.includes(view) ? view : "Home";
   const initialClaimsTab = tab === "start" ? "start" : "status";
   const initialClaimId = typeof claim === "string" ? claim : undefined;
-  return <Portal key={`${initialNav}:${initialClaimsTab}:${initialClaimId ?? ""}`} initialNav={initialNav} initialClaimsTab={initialClaimsTab} initialClaimId={initialClaimId} />;
+  const initialMemberId = typeof member === "string" ? member : undefined;
+  return <MockLogin initialNav={initialNav} initialClaimsTab={initialClaimsTab} initialClaimId={initialClaimId} initialMemberId={initialMemberId} initialProfileSection={typeof section === "string" ? section : undefined} />;
 }
