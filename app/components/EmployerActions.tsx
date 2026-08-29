@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useLanguage } from "../language";
 import { Icon, type IconName } from "./Icon";
 import { readBrowserStore, writeBrowserStore } from "./browser-store";
 import styles from "./employer-actions.module.css";
@@ -27,17 +29,39 @@ const principal: Record<string, Action[]> = {
 };
 
 export function EmployerActions({ role, view }: { role: Role; view: string }) {
+  const { t, tpl } = useLanguage();
   const actions = (role === "principal" ? principal : establishment)[view] ?? [];
   const [active, setActive] = useState<Action | null>(null);
   const storeKey = `epfo.${role}-requests`; const [trackers, setTrackers] = useState<Tracker[]>(() => readBrowserStore<Tracker[]>(storeKey, []));
   useEffect(() => writeBrowserStore(storeKey, trackers), [storeKey, trackers]);
   const submitted = (action: Action) => setTrackers((current) => [{ id: `${role === "principal" ? "PE" : "EST"}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, title: action.title, view, status: role === "principal" ? "Compliance review in progress" : "Employer validation in progress", submitted: "28 Aug 2026" }, ...current]);
   const visibleTrackers = trackers.filter((tracker) => tracker.view === view);
-  return <section className={styles.page}>{actions.length ? <><p className="eyebrow">{role === "principal" ? "PRINCIPAL EMPLOYER SERVICES" : "ESTABLISHMENT SERVICES"}</p><div className={styles.grid}>{actions.map((action) => <button className={styles.card} type="button" key={action.title} onClick={() => setActive(action)}><span><Icon name={action.icon} size={20} /></span><div><strong>{action.title}</strong><p>{action.detail}</p></div><Icon name="arrow" size={16} /></button>)}</div></> : <section className={styles.empty}><Icon name="file" size={22} /><strong>No action is available here yet.</strong></section>}{visibleTrackers.length > 0 && <section className={styles.trackers}><div><p className="eyebrow">REQUEST TRACKER</p><h2>Requests in this service</h2></div>{visibleTrackers.map((tracker) => <article key={tracker.id}><span><Icon name="file" size={17} /></span><div><strong>{tracker.title}</strong><small>{tracker.id} · Submitted {tracker.submitted}</small><p>{tracker.status}</p></div></article>)}</section>}{active && <ActionDrawer action={active} onSubmitted={() => submitted(active)} onClose={() => setActive(null)} />}</section>;
+  return <section className={styles.page}>{actions.length ? <><p className="eyebrow">{t(role === "principal" ? "PRINCIPAL EMPLOYER SERVICES" : "ESTABLISHMENT SERVICES")}</p><div className={styles.grid}>{actions.map((action) => <button className={styles.card} type="button" key={action.title} onClick={() => setActive(action)}><span><Icon name={action.icon} size={20} /></span><div><strong>{t(action.title)}</strong><p>{t(action.detail)}</p></div><Icon name="arrow" size={16} /></button>)}</div></> : <section className={styles.empty}><Icon name="file" size={22} /><strong>{t("No action is available here yet.")}</strong></section>}{visibleTrackers.length > 0 && <section className={styles.trackers}><div><p className="eyebrow">{t("REQUEST TRACKER")}</p><h2>{t("Requests in this service")}</h2></div>{visibleTrackers.map((tracker) => <article key={tracker.id}><span><Icon name="file" size={17} /></span><div><strong>{t(tracker.title)}</strong><small>{tpl("{id} · Submitted {date}", { id: tracker.id, date: tracker.submitted })}</small><p>{t(tracker.status)}</p></div></article>)}</section>}{active && <ActionDrawer action={active} onSubmitted={() => submitted(active)} onClose={() => setActive(null)} />}</section>;
 }
 
 function ActionDrawer({ action, onClose, onSubmitted }: { action: Action; onClose: () => void; onSubmitted: () => void }) {
+  const { t, tpl } = useLanguage();
   const [stage, setStage] = useState<"details" | "preview" | "submitting" | "done">("details");
+  const drawerRef = useRef<HTMLElement>(null);
   useEffect(() => { if (stage === "submitting") { const timer = window.setTimeout(() => { onSubmitted(); setStage("done"); }, 850); return () => window.clearTimeout(timer); } }, [stage, onSubmitted]);
-  return <div className={styles.layer}><button className={styles.scrim} type="button" aria-label="Close service request" onClick={onClose} /><aside className={styles.drawer} role="dialog" aria-modal="true"><header><div><p className="eyebrow">EMPLOYER SERVICE</p><h2>{action.title}</h2><p>Prototype only. Nothing is sent to EPFO or a third party.</p></div><button type="button" onClick={onClose}><Icon name="close" /></button></header>{stage === "details" ? <form onSubmit={(event) => { event.preventDefault(); setStage("preview"); }}>{action.fields.map((field) => <label key={field}>{field}<input required placeholder={field === "ECR file" || field.includes("document") ? "Choose file in a live service" : `Enter ${field.toLowerCase()}`} /></label>)}<p className={styles.note}>{action.note}</p><button className="primary-button">Preview request</button></form> : stage === "preview" ? <section className={styles.preview}><p className="eyebrow">REQUEST PREVIEW</p><h3>{action.title}</h3><p>{action.detail}</p><dl>{action.fields.map((field) => <div key={field}><dt>{field}</dt><dd>Provided for review</dd></div>)}</dl><button className="primary-button" type="button" onClick={() => setStage("submitting")}>Submit request</button><button className={styles.cancel} type="button" onClick={() => setStage("details")}>Back to edit</button></section> : stage === "submitting" ? <section className={styles.loading}><span /><strong>Submitting your request</strong><p>Validating the details and preparing the employer record.</p></section> : <section className={styles.done}><span><Icon name="shield" size={22} /></span><h3>Request submitted</h3><p>Your prototype request is ready for the relevant EPFO workflow.</p><button className="primary-button" type="button" onClick={onClose}>Done</button></section>}</aside></div>;
+  useEffect(() => {
+    // Lock background scroll while the drawer is open — on mobile the drawer covers the full screen, so a scrollable background behind it is what leaves the member feeling stuck.
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, []);
+  useEffect(() => {
+    // Each step (details -> preview -> submitting -> done) renders in the same scrollable drawer without remounting it, so without this the drawer keeps whatever scroll position was left from the previous step.
+    drawerRef.current?.scrollTo({ top: 0 });
+  }, [stage]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  // Portalled to document.body: `.content` carries the page-enter animation, which leaves a permanent transform (fill:both) that turns it into a containing block for fixed descendants — without this, the drawer renders inside that box instead of over the full viewport, landing it behind the fixed topbar (and, once scrolled, off-screen).
+  return createPortal(
+    <div className={styles.layer}><button className={styles.scrim} type="button" aria-label="Close service request" onClick={onClose} /><aside ref={drawerRef} className={styles.drawer} role="dialog" aria-modal="true"><header><div><p className="eyebrow">{t("EMPLOYER SERVICE")}</p><h2>{t(action.title)}</h2><p>{t("Prototype only. Nothing is sent to EPFO or a third party.")}</p></div><button type="button" onClick={onClose} aria-label="Close service request"><Icon name="close" /></button></header>{stage === "details" ? <form onSubmit={(event) => { event.preventDefault(); setStage("preview"); }}>{action.fields.map((field) => <label key={field}>{t(field)}<input required placeholder={field === "ECR file" || field.includes("document") ? t("Choose file in a live service") : tpl("Enter {field}", { field: t(field).toLowerCase() })} /></label>)}<p className={styles.note}>{t(action.note)}</p><button className="primary-button">{t("Preview request")}</button></form> : stage === "preview" ? <section className={styles.preview}><p className="eyebrow">{t("REQUEST PREVIEW")}</p><h3>{t(action.title)}</h3><p>{t(action.detail)}</p><dl>{action.fields.map((field) => <div key={field}><dt>{t(field)}</dt><dd>{t("Provided for review")}</dd></div>)}</dl><button className="primary-button" type="button" onClick={() => setStage("submitting")}>{t("Submit request")}</button><button className={styles.cancel} type="button" onClick={() => setStage("details")}>{t("Back to edit")}</button></section> : stage === "submitting" ? <section className={styles.loading}><span /><strong>{t("Submitting your request")}</strong><p>{t("Validating the details and preparing the employer record.")}</p></section> : <section className={styles.done}><span><Icon name="shield" size={22} /></span><h3>{t("Request submitted")}</h3><p>{t("Your prototype request is ready for the relevant EPFO workflow.")}</p><button className="primary-button" type="button" onClick={onClose}>{t("Done")}</button></section>}</aside></div>,
+    document.body,
+  );
 }

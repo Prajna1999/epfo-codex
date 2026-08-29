@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLanguage } from "../language";
 import { Icon } from "./Icon";
 import { isMockOtp } from "./mock-login-data";
@@ -23,13 +24,34 @@ export function EmploymentHistory({ onOpenPassbook, onStartTransfer }: { onOpenP
 function ServiceDrawer({ record, onClose, onOpenPassbook, onStartTransfer }: { record: ServiceRecord; onClose: () => void; onOpenPassbook: (memberId: string) => void; onStartTransfer: () => void }) {
   const { t } = useLanguage();
   const [markingExit, setMarkingExit] = useState(false);
-  return <div className={styles.drawerLayer}><button className={styles.scrim} type="button" aria-label={t("Close service details")} onClick={onClose} /><aside className={styles.drawer} role="dialog" aria-modal="true" aria-labelledby="service-detail-title"><header><div><p className="eyebrow">{t("MEMBER SERVICE DETAILS")}</p><h2 id="service-detail-title">{record.employer}</h2><code>{record.id}</code></div><button type="button" aria-label={t("Close service details")} onClick={onClose}><Icon name="close" /></button></header>{markingExit ? <MarkExitFlow record={record} onCancel={() => setMarkingExit(false)} /> : <><dl><Detail label={t("UAN")} value="101727439258" /><Detail label={t("Date of joining · EPF")} value={record.epfJoining} /><Detail label={t("Date of joining · EPS")} value={record.epsJoining} /><Detail label={t("Date of exit · EPF")} value={record.epfExit} /><Detail label={t("Date of exit · EPS")} value={record.epsExit} /><Detail label={t("Reason for leaving")} value={record.reason} /></dl><section className={styles.transfer}><span className={`status ${record.status === "Active" ? "active" : "done"}`}>{t(record.status)}</span><div><strong>{t("PF transfer status")}</strong><p>{record.transfer}</p></div></section>{record.status === "Active" && <button className={styles.markExit} type="button" onClick={() => setMarkingExit(true)}>Mark exit <Icon name="arrow" size={16} /></button>}{record.status === "Eligible" && <button className={styles.markExit} type="button" onClick={onStartTransfer}>Start transfer <Icon name="arrow" size={16} /></button>}<button className={styles.passbookLink} type="button" onClick={() => onOpenPassbook(record.id)}><Icon name="book" size={17} />{t("View this member's passbook")}</button></>}</aside></div>;
+  const [exitStage, setExitStage] = useState<string>("details");
+  const drawerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    // Lock background scroll while the drawer is open — on mobile the drawer covers the full screen, so a scrollable background behind it is what leaves the member feeling stuck.
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, []);
+  useEffect(() => {
+    drawerRef.current?.scrollTo({ top: 0 });
+  }, [markingExit, exitStage]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  // Portalled to document.body: `.content` carries the page-enter animation, which leaves a permanent transform (fill:both) that turns it into a containing block for fixed descendants — without this, the drawer renders inside that box instead of over the full viewport, landing it behind the fixed topbar (and, once scrolled, off-screen).
+  return createPortal(
+    <div className={styles.drawerLayer}><button className={styles.scrim} type="button" aria-label={t("Close service details")} onClick={onClose} /><aside ref={drawerRef} className={styles.drawer} role="dialog" aria-modal="true" aria-labelledby="service-detail-title"><header><div><p className="eyebrow">{t("MEMBER SERVICE DETAILS")}</p><h2 id="service-detail-title">{record.employer}</h2><code>{record.id}</code></div><button type="button" aria-label={t("Close service details")} onClick={onClose}><Icon name="close" /></button></header>{markingExit ? <MarkExitFlow record={record} onCancel={() => setMarkingExit(false)} onStageChange={setExitStage} /> : <><dl><Detail label={t("UAN")} value="101727439258" /><Detail label={t("Date of joining · EPF")} value={record.epfJoining} /><Detail label={t("Date of joining · EPS")} value={record.epsJoining} /><Detail label={t("Date of exit · EPF")} value={record.epfExit} /><Detail label={t("Date of exit · EPS")} value={record.epsExit} /><Detail label={t("Reason for leaving")} value={record.reason} /></dl><section className={styles.transfer}><span className={`status ${record.status === "Active" ? "active" : "done"}`}>{t(record.status)}</span><div><strong>{t("PF transfer status")}</strong><p>{record.transfer}</p></div></section>{record.status === "Active" && <button className={styles.markExit} type="button" onClick={() => setMarkingExit(true)}>Mark exit <Icon name="arrow" size={16} /></button>}{record.status === "Eligible" && <button className={styles.markExit} type="button" onClick={onStartTransfer}>Start transfer <Icon name="arrow" size={16} /></button>}<button className={styles.passbookLink} type="button" onClick={() => onOpenPassbook(record.id)}><Icon name="book" size={17} />{t("View this member's passbook")}</button></>}</aside></div>,
+    document.body,
+  );
 }
 
-function MarkExitFlow({ record, onCancel }: { record: ServiceRecord; onCancel: () => void }) {
+function MarkExitFlow({ record, onCancel, onStageChange }: { record: ServiceRecord; onCancel: () => void; onStageChange?: (stage: string) => void }) {
   const [stage, setStage] = useState<"details" | "otp" | "employer" | "epfo" | "done">("details");
   const [otp, setOtp] = useState("");
   const [otpError, setOtpError] = useState(false);
+  useEffect(() => onStageChange?.(stage), [stage, onStageChange]);
   useEffect(() => {
     if (stage === "employer") { const timer = window.setTimeout(() => setStage("epfo"), 950); return () => window.clearTimeout(timer); }
     if (stage === "epfo") { const timer = window.setTimeout(() => setStage("done"), 950); return () => window.clearTimeout(timer); }

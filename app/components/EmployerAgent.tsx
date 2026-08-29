@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLanguage } from "../language";
 import { checkComplianceReadiness, checkContributionDue, checkEcrFiling, complianceReadinessSummary, establishmentActions, pendingActionsSummary, principalActions, type DueCheck, type EcrCheck, type EmployerAction, type ReadinessItem } from "./employer-agent-data";
 import { Icon, type IconName } from "./Icon";
 
@@ -31,6 +32,7 @@ const INSIGHTS: Insight[] = [
 type Selection = { kind: "insight"; item: Insight } | { kind: "action"; item: EmployerAction };
 
 export function EmployerAgent({ role, onClose, onNavigate, width, onResize }: { role: "establishment" | "principal"; onClose: () => void; onNavigate: (view: string) => void; width: number; onResize: (width: number) => void }) {
+  const { t, tpl } = useLanguage();
   const [stage, setStage] = useState<"scanning" | "ready">("scanning");
   const [selected, setSelected] = useState<Selection | null>(null);
   const [resizing, setResizing] = useState(false);
@@ -86,35 +88,35 @@ export function EmployerAgent({ role, onClose, onNavigate, width, onResize }: { 
     onClose();
   };
 
-  const roleLabel = role === "principal" ? "Principal employer" : "Establishment";
+  const roleLabel = t(role === "principal" ? "Principal employer" : "Establishment");
 
   return <div className="agent-layer">
-    {!embedded && <button className="agent-scrim" type="button" aria-label="Close compliance guide" onClick={onClose} />}
+    {!embedded && <button className="agent-scrim" type="button" aria-label={t("Close compliance guide")} onClick={onClose} />}
     <aside className="agent-drawer page-enter" role="dialog" aria-modal={embedded ? undefined : true} aria-labelledby="employer-agent-title" style={{ "--agent-width": `${width}px` } as React.CSSProperties}>
-      {embedded && <div className={`agent-resize-handle${resizing ? " is-active" : ""}`} onPointerDown={startResize} onKeyDown={nudgeWidth} role="separator" aria-orientation="vertical" aria-label="Resize compliance guide panel" aria-valuenow={width} aria-valuemin={MIN_WIDTH} aria-valuemax={MAX_WIDTH} tabIndex={0} />}
-      <header className="agent-head"><div><span className="agent-mark"><Icon name="spark" size={18} /></span><p className="eyebrow">{roleLabel.toUpperCase()} GUIDE · PREVIEW</p><h2 id="employer-agent-title">Your compliance agent</h2><p>It reads this account and checks it against EPFO&apos;s own filing and compliance norms. It never files, confirms or submits anything without your approval.</p></div><button type="button" onClick={onClose} aria-label="Close compliance guide"><Icon name="close" /></button></header>
-      {stage === "scanning" ? <div className="agent-scanning" role="status" aria-live="polite"><span /><strong>Scanning this account</strong><p>Checking ECR filing, contribution due dates and compliance tasks…</p></div> : selected?.kind === "action" ? <section className="agent-confirm">
-        <button className="agent-back" type="button" onClick={() => setSelected(null)}>← Back to tasks</button>
-        <p className="eyebrow">CONFIRM BEFORE CONTINUING</p><span className={`agent-impact ${selected.item.impact.toLowerCase().replace("-", "")}`}>{selected.item.impact}</span>
-        <h3>{selected.item.title}</h3><p>{selected.item.detail}</p>
-        <dl><div><dt>What will happen</dt><dd>Open the relevant workspace. Nothing is filed or confirmed here.</dd></div><div><dt>Your control</dt><dd>You review each record and submit the actual request separately.</dd></div></dl>
-        <button className="primary-button" type="button" onClick={continueAction}>I understand — continue</button>
-        <button className="agent-cancel" type="button" onClick={() => setSelected(null)}>Cancel</button>
+      {embedded && <div className={`agent-resize-handle${resizing ? " is-active" : ""}`} onPointerDown={startResize} onKeyDown={nudgeWidth} role="separator" aria-orientation="vertical" aria-label={t("Resize compliance guide panel")} aria-valuenow={width} aria-valuemin={MIN_WIDTH} aria-valuemax={MAX_WIDTH} tabIndex={0} />}
+      <header className="agent-head"><div><span className="agent-mark"><Icon name="spark" size={18} /></span><p className="eyebrow">{tpl("{role} GUIDE · PREVIEW", { role: roleLabel.toUpperCase() })}</p><h2 id="employer-agent-title">{t("Your compliance agent")}</h2><p>{t("It reads this account and checks it against EPFO's own filing and compliance norms. It never files, confirms or submits anything without your approval.")}</p></div><button type="button" onClick={onClose} aria-label={t("Close compliance guide")}><Icon name="close" /></button></header>
+      {stage === "scanning" ? <div className="agent-scanning" role="status" aria-live="polite"><span /><strong>{t("Scanning this account")}</strong><p>{t("Checking ECR filing, contribution due dates and compliance tasks…")}</p></div> : selected?.kind === "action" ? <section className="agent-confirm">
+        <button className="agent-back" type="button" onClick={() => setSelected(null)}>{t("← Back to tasks")}</button>
+        <p className="eyebrow">{t("CONFIRM BEFORE CONTINUING")}</p><span className={`agent-impact ${selected.item.impact.toLowerCase().replace("-", "")}`}>{t(selected.item.impact)}</span>
+        <h3>{t(selected.item.title)}</h3><p>{t(selected.item.detail)}</p>
+        <dl><div><dt>{t("What will happen")}</dt><dd>{t("Open the relevant workspace. Nothing is filed or confirmed here.")}</dd></div><div><dt>{t("Your control")}</dt><dd>{t("You review each record and submit the actual request separately.")}</dd></div></dl>
+        <button className="primary-button" type="button" onClick={continueAction}>{t("I understand — continue")}</button>
+        <button className="agent-cancel" type="button" onClick={() => setSelected(null)}>{t("Cancel")}</button>
       </section> : selected?.kind === "insight" ? <section className="agent-confirm">
-        <button className="agent-back" type="button" onClick={() => setSelected(null)}>← Back to tasks</button>
-        <p className="eyebrow">ACCOUNT INSIGHT</p>
-        <h3>{selected.item.title}</h3>
+        <button className="agent-back" type="button" onClick={() => setSelected(null)}>{t("← Back to tasks")}</button>
+        <p className="eyebrow">{t("ACCOUNT INSIGHT")}</p>
+        <h3>{t(selected.item.title)}</h3>
         {selected.item.id === "ecr" && <EcrInsight result={ecr} />}
         {selected.item.id === "contribution" && <ContributionDueInsight result={contribution} />}
         {selected.item.id === "compliance" && <ComplianceInsight items={readiness} />}
-        <button className="agent-cancel" type="button" onClick={() => setSelected(null)}>Back to tasks</button>
+        <button className="agent-cancel" type="button" onClick={() => setSelected(null)}>{t("Back to tasks")}</button>
       </section> : <>
         <EmployerAskInWords role={role} ecr={ecr} contribution={contribution} />
-        <section className="agent-brief"><span><Icon name={briefOk ? "shield" : "bell"} size={18} /></span><div><strong>{briefOk ? "Nothing needs attention" : "One or more items need attention"}</strong><p>{briefText}</p></div></section>
-        <section className="agent-tasks"><div className="agent-section-head"><div><p className="eyebrow">ACCOUNT INSIGHTS</p><h3>Or choose a question</h3></div><small>Read-only, no approval needed</small></div>{INSIGHTS.map((insight) => <button key={insight.id} type="button" onClick={() => setSelected({ kind: "insight", item: insight })}><span><Icon name={insight.icon} size={18} /></span><div><strong>{insight.title}</strong></div><i className="agent-impact">Read-only</i><Icon name="arrow" size={16} /></button>)}</section>
-        {actions.length > 0 && <section className="agent-tasks"><div className="agent-section-head"><div><p className="eyebrow">ACCOUNT ACTIONS</p><h3>Prepare a request</h3></div><small>Every action pauses for approval</small></div>{actions.map((action) => <button key={action.id} type="button" onClick={() => setSelected({ kind: "action", item: action })}><span><Icon name={action.icon} size={18} /></span><div><strong>{action.title}</strong><small>{action.detail}</small></div><i className={`agent-impact ${action.impact.toLowerCase().replace("-", "")}`}>{action.impact}</i><Icon name="arrow" size={16} /></button>)}</section>}
+        <section className="agent-brief"><span><Icon name={briefOk ? "shield" : "bell"} size={18} /></span><div><strong>{t(briefOk ? "Nothing needs attention" : "One or more items need attention")}</strong><p>{briefText}</p></div></section>
+        <section className="agent-tasks"><div className="agent-section-head"><div><p className="eyebrow">{t("ACCOUNT INSIGHTS")}</p><h3>{t("Or choose a question")}</h3></div><small>{t("Read-only, no approval needed")}</small></div>{INSIGHTS.map((insight) => <button key={insight.id} type="button" onClick={() => setSelected({ kind: "insight", item: insight })}><span><Icon name={insight.icon} size={18} /></span><div><strong>{t(insight.title)}</strong></div><i className="agent-impact">{t("Read-only")}</i><Icon name="arrow" size={16} /></button>)}</section>
+        {actions.length > 0 && <section className="agent-tasks"><div className="agent-section-head"><div><p className="eyebrow">{t("ACCOUNT ACTIONS")}</p><h3>{t("Prepare a request")}</h3></div><small>{t("Every action pauses for approval")}</small></div>{actions.map((action) => <button key={action.id} type="button" onClick={() => setSelected({ kind: "action", item: action })}><span><Icon name={action.icon} size={18} /></span><div><strong>{t(action.title)}</strong><small>{t(action.detail)}</small></div><i className={`agent-impact ${action.impact.toLowerCase().replace("-", "")}`}>{t(action.impact)}</i><Icon name="arrow" size={16} /></button>)}</section>}
       </>}
-      <footer className="agent-footer"><Icon name="shield" size={15} /> This agent gives guidance, not a decision. EPFO filing rules and verification still apply.</footer>
+      <footer className="agent-footer"><Icon name="shield" size={15} /> {t("This agent gives guidance, not a decision. EPFO filing rules and verification still apply.")}</footer>
     </aside>
   </div>;
 }
@@ -134,15 +136,17 @@ function ContributionDueInsight({ result }: { result: DueCheck }) {
 }
 
 function ComplianceInsight({ items }: { items: ReadinessItem[] }) {
+  const { t } = useLanguage();
   return <dl className="agent-insight-list">
     {items.map((item) => <div key={item.label}>
-      <dt>{item.label}<i className={`agent-impact ${item.ready ? "ok" : ""}`}>{item.ready ? "Ready" : "Action needed"}</i></dt>
+      <dt>{t(item.label)}<i className={`agent-impact ${item.ready ? "ok" : ""}`}>{item.ready ? t("Ready") : t("Action needed")}</i></dt>
       <dd>{item.detail}</dd>
     </div>)}
   </dl>;
 }
 
 function EmployerAskInWords({ role, ecr, contribution }: { role: "establishment" | "principal"; ecr: EcrCheck; contribution: DueCheck }) {
+  const { t } = useLanguage();
   const [text, setText] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [answer, setAnswer] = useState<string | null>(null);
@@ -163,13 +167,13 @@ function EmployerAskInWords({ role, ecr, contribution }: { role: "establishment"
         : intentType === "contribution_due" ? contribution.message
         : intentType === "compliance_readiness" ? complianceReadinessSummary()
         : intentType === "pending_actions" ? pendingActionsSummary(role)
-        : "I couldn't tell what you're asking — try asking about this month's ECR, the contribution due date, or what's pending for compliance.";
+        : t("I couldn't tell what you're asking — try asking about this month's ECR, the contribution due date, or what's pending for compliance.");
       setAnswer(result);
       setStatus("idle");
     } catch {
       setStatus("error");
     }
-  }, [role, ecr, contribution]);
+  }, [role, ecr, contribution, t]);
 
   const ask = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -185,19 +189,19 @@ function EmployerAskInWords({ role, ecr, contribution }: { role: "establishment"
   const showSuggestions = focused && status !== "loading" && text.trim().length === 0;
 
   return <section className="agent-ask">
-    <label htmlFor="employer-agent-ask-input"><Icon name="spark" size={14} />Ask in your own words</label>
+    <label htmlFor="employer-agent-ask-input"><Icon name="spark" size={14} />{t("Ask in your own words")}</label>
     <form onSubmit={ask}>
       <div className={`agent-ask-field${status === "loading" ? " is-loading" : ""}`}>
-        <input id="employer-agent-ask-input" type="text" value={text} onChange={(event) => setText(event.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder="Ask about ECR, contributions, or compliance…" disabled={status === "loading"} autoComplete="off" />
-        <button type="submit" className="agent-ask-send" aria-label="Ask" disabled={status === "loading" || !text.trim()}>{status === "loading" ? <span className="agent-ask-spinner" aria-hidden="true" /> : <Icon name="arrow" size={15} />}</button>
+        <input id="employer-agent-ask-input" type="text" value={text} onChange={(event) => setText(event.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder={t("Ask about ECR, contributions, or compliance…")} disabled={status === "loading"} autoComplete="off" />
+        <button type="submit" className="agent-ask-send" aria-label={t("Ask")} disabled={status === "loading" || !text.trim()}>{status === "loading" ? <span className="agent-ask-spinner" aria-hidden="true" /> : <Icon name="arrow" size={15} />}</button>
       </div>
-      {showSuggestions && <div className="agent-suggestions" aria-label="Example questions">
-        <p className="agent-suggestions-title">Try asking</p>
-        {presets.map((question) => <button key={question} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => pickPreset(question)}>{question}</button>)}
+      {showSuggestions && <div className="agent-suggestions" aria-label={t("Example questions")}>
+        <p className="agent-suggestions-title">{t("Try asking")}</p>
+        {presets.map((question) => <button key={question} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => pickPreset(question)}>{t(question)}</button>)}
       </div>}
-      {status === "error" && <small className="agent-ask-error">Couldn&apos;t reach the intent service. Confirm OPENAI_API_KEY is set and try again.</small>}
+      {status === "error" && <small className="agent-ask-error">{t("Couldn't reach the intent service. Confirm OPENAI_API_KEY is set and try again.")}</small>}
       {answer && <div className="agent-ask-answer"><Icon name="spark" size={15} /><div><p>{answer}</p></div></div>}
-      <small>Understands your question with AI, then answers only from this account&apos;s real filing status and EPFO&apos;s own rules.</small>
+      <small>{t("Understands your question with AI, then answers only from this account's real filing status and EPFO's own rules.")}</small>
     </form>
   </section>;
 }
