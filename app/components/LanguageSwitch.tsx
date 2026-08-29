@@ -1,18 +1,15 @@
 "use client";
 
-import { useLanguage } from "../language";
+import { languages, useLanguage } from "../language";
 
 export function LanguageSwitch() {
   const { lang, setLang } = useLanguage();
 
   return (
-    <div className="lang-switch" role="group" aria-label="Language">
-      <button type="button" className={lang === "en" ? "active" : ""} onClick={() => setLang("en")} aria-label="English">
-        EN
-      </button>
-      <button type="button" className={lang === "hi" ? "active" : ""} onClick={() => setLang("hi")} aria-label="Romanized Hindi">
-        HI <span lang="hi">हिं</span>
-      </button>
+    <div className="lang-switch">
+      <select value={lang} onChange={(event) => setLang(event.target.value as typeof lang)} aria-label="Romanized Indic language">
+        {languages.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
+      </select>
     </div>
   );
 }
