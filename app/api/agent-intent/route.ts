@@ -47,6 +47,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "OPENAI_API_KEY is not configured on this server." }, { status: 500 });
   }
 
+
   let message: unknown;
   try {
     ({ message } = await request.json());

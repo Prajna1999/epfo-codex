@@ -607,15 +607,15 @@ function answerContributionByEmployer(): AskAnswer {
   return { text, chart: { kind: "generic", form: "treemap", title: series.title, points: series.points, unit: series.unit } };
 }
 
-type ChartOption = { id: string; label: string; description: string; build: () => AskAnswer };
+type ChartOption = { id: string; label: string; description: string; query: string; build: () => AskAnswer };
 
 const CHART_OPTIONS: ChartOption[] = [
-  { id: "retirement", label: "Retirement balance projection", description: "Real compounding to age 58 at today's EPF rate.", build: answerRetirementProjection },
-  { id: "withdrawal", label: "Withdrawal cost comparison", description: "Illustrative ₹50,000 example — ask with a real amount for your own figure.", build: () => ({ text: "Illustrative example: comparing your projected balance with and without a ₹50,000 withdrawal today. Ask in your own words with a real amount for your own figure.", chart: { kind: "line", series: projectRetirementSeries(), compareSeries: projectRetirementSeries(50000) } }) },
-  { id: "pension", label: "Pension by claiming age", description: "Slopegraph across 50, 58 and 60.", build: answerPensionEstimate },
-  { id: "contributions", label: "Contribution history", description: "Sparkline table across financial years.", build: answerContributionHistory },
-  { id: "timeline", label: "Employment timeline", description: "Connected service record across employers.", build: answerServiceTimeline },
-  { id: "contributions_by_employer", label: "Contribution total by employer", description: "Treemap of your recorded PF contribution, summed per employer.", build: answerContributionByEmployer },
+  { id: "retirement", label: "Retirement balance projection", description: "Real compounding to age 58 at today's EPF rate.", query: "Show me a line chart of my projected PF balance to retirement.", build: answerRetirementProjection },
+  { id: "withdrawal", label: "Withdrawal cost comparison", description: "Illustrative ₹50,000 example — ask with a real amount for your own figure.", query: "Show me a chart comparing my retirement corpus with and without withdrawing ₹50,000 today.", build: () => ({ text: "Illustrative example: comparing your projected balance with and without a ₹50,000 withdrawal today. Ask in your own words with a real amount for your own figure.", chart: { kind: "line", series: projectRetirementSeries(), compareSeries: projectRetirementSeries(50000) } }) },
+  { id: "pension", label: "Pension by claiming age", description: "Slopegraph across 50, 58 and 60.", query: "Show me a chart of my monthly pension by claiming age.", build: answerPensionEstimate },
+  { id: "contributions", label: "Contribution history", description: "Sparkline table across financial years.", query: "Show me my contribution history by financial year.", build: answerContributionHistory },
+  { id: "timeline", label: "Employment timeline", description: "Connected service record across employers.", query: "Show me my employment timeline across employers.", build: answerServiceTimeline },
+  { id: "contributions_by_employer", label: "Contribution total by employer", description: "Treemap of your recorded PF contribution, summed per employer.", query: "Show me a treemap of my total PF contribution by employer.", build: answerContributionByEmployer },
 ];
 
 function answerChartRequest(dataSource: DataSource | null, chartForm: ChartForm | null, amount: number | null): AskAnswer {
@@ -626,10 +626,10 @@ function answerChartRequest(dataSource: DataSource | null, chartForm: ChartForm 
   return { text, chart: { kind: "generic", form, title: series.title, points: series.points, unit: series.unit } };
 }
 
-function ChartPicker({ onPick }: { onPick: (answer: AskAnswer) => void }) {
+function ChartPicker({ onPick }: { onPick: (query: string) => void }) {
   return <div className="agent-chart-picker" aria-label="Chart options">
     <p className="agent-chart-picker-title">Generate a chart</p>
-    {CHART_OPTIONS.map((option) => <button key={option.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => onPick(option.build())}>
+    {CHART_OPTIONS.map((option) => <button key={option.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => onPick(option.query)}>
       <strong>{option.label}</strong><small>{option.description}</small>
     </button>)}
   </div>;
@@ -748,6 +748,13 @@ function AskInWords({ eligibility }: { eligibility: EligibilityResult[] }) {
       return;
     }
     if (isSlash) return;
+    // An unedited pick from the /chart list answers instantly from real computed data; edit even one word and it falls through to the AI classifier instead.
+    const matchedOption = CHART_OPTIONS.find((option) => option.query === text.trim());
+    if (matchedOption) {
+      setAnswer(matchedOption.build());
+      setStatus("idle");
+      return;
+    }
     runQuery(text);
   };
 
@@ -757,10 +764,8 @@ function AskInWords({ eligibility }: { eligibility: EligibilityResult[] }) {
     runQuery(question);
   };
 
-  const pickChart = (built: AskAnswer) => {
-    setAnswer(built);
-    setText("");
-    setStatus("idle");
+  const pickChart = (query: string) => {
+    setText(query);
   };
 
   const showSuggestions = focused && status !== "loading" && (text.trim().length === 0 || isSlash);
