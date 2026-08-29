@@ -16,7 +16,7 @@ export function EmployerPortal({ role, onLogout }: { role: "establishment" | "pr
   const contextName = role === "principal" ? "Apex Facilities · Principal employer" : "Infosys Limited · Establishment";
 
   return <main className="app-shell" style={{ "--agent-width": `${agentWidth}px` } as CSSProperties}>
-    <PortalTopbar mobileOpen={mobileOpen} onToggleMobile={() => setMobileOpen(!mobileOpen)} onOpenAgent={() => setAgentOpen(true)} agentLabel="Compliance guide" onLogout={onLogout} profile={{ initials: role === "principal" ? "AF" : "IL", name: contextName, status: "Authorised access", accountId: role === "principal" ? "Principal employer · PE-00184" : "Establishment ID · MHBAN1318576", accountStatus: "KYC and DSC verified" }} />
+    <PortalTopbar mobileOpen={mobileOpen} onToggleMobile={() => setMobileOpen(!mobileOpen)} onOpenAgent={() => setAgentOpen(true)} agentLabel={t("Compliance guide")} onLogout={onLogout} profile={{ initials: role === "principal" ? "AF" : "IL", name: contextName, status: "Authorised access", accountId: role === "principal" ? "Principal employer · PE-00184" : "Establishment ID · MHBAN1318576", accountStatus: "KYC and DSC verified" }} />
     <PortalSidebar type={role === "principal" ? "principal" : "employer"} activeNav={activeNav} mobileOpen={mobileOpen} onNavigate={setActiveNav} onClose={() => setMobileOpen(false)} />
     <section key={activeNav} className={`content page-enter${agentOpen ? " agent-open" : ""}`}>
       <div className="context-strip"><span className="verified-pill">{t("Mock workspace")}</span></div>
