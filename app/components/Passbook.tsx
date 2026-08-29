@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useLanguage } from "../language";
+import { Icon } from "./Icon";
 import { members, passbookTotals } from "./passbook-data";
 import styles from "./passbook.module.css";
 
@@ -20,10 +21,10 @@ export function Passbook({ initialMemberId }: { initialMemberId?: string }) {
     <section className={styles.page} aria-labelledby="passbook-title">
       <div className={styles.heading}>
         <div><p className="eyebrow">{t("PASSBOOK")}</p><h1 id="passbook-title">{t("Passbook")}</h1><p>{t("Your PF credits and debits in one place.")}</p></div>
-        <div className={styles.filters}>
+        <div className={styles.controls}><a className={styles.download} href="/pf-statement.pdf" download={`EPFO-Passbook-${memberId}-${year}.pdf`}><Icon name="download" size={16} />Download passbook PDF</a><div className={styles.filters}>
           <label><span>{t("Member ID")}</span><select value={memberId} onChange={(event) => selectMember(event.target.value)}>{members.map((item) => <option key={item.id} value={item.id}>{item.id} · {item.label}</option>)}</select></label>
           <label><span>{t("Financial year")}</span><select value={year} onChange={(event) => setYear(event.target.value)}>{member.passbooks.map((item) => <option key={item.year}>{item.year}</option>)}</select></label>
-        </div>
+        </div></div>
       </div>
 
       <article className={styles.card}>

@@ -2,7 +2,10 @@
 
 import { createContext, useCallback, useContext, useSyncExternalStore, type ReactNode } from "react";
 
-export type Lang = "en" | "hi";
+export const languages = [
+  { id: "en", label: "English" }, { id: "hi", label: "Hinglish" }, { id: "bn", label: "Banglish" }, { id: "mr", label: "Marathinglish" }, { id: "te", label: "Teluglish" }, { id: "ta", label: "Tanglish" }, { id: "gu", label: "Gujlish" }, { id: "kn", label: "Kanglish" }, { id: "ml", label: "Manglish" }, { id: "pa", label: "Punglish" }, { id: "or", label: "Odia (Roman)" },
+] as const;
+export type Lang = (typeof languages)[number]["id"];
 
 const dict: Record<string, { en: string; hi: string }> = {
   "Open navigation": { en: "Open navigation", hi: "Navigation kholen" },
@@ -428,6 +431,19 @@ const dict: Record<string, { en: string; hi: string }> = {
 
 const STORAGE_KEY = "epfo.lang";
 
+const romanized: Partial<Record<Lang, Record<string, string>>> = {
+  hi: { Home: "Ghar", Claims: "Daave", "Service history": "Seva itihaas", "Profile details": "Profile vivaran", "File a Claim": "Daava darj karein", "Claim status": "Daave ki sthiti", "Need help?": "Madad chahiye?", "Sign in to EPFO": "EPFO mein sign in karein", "Your retirement account": "Aapka retirement account", "Good afternoon, Rahul": "Namaste, Rahul" },
+  bn: { Home: "Bari", Claims: "Dabi", "Service history": "Seva itihas", "Profile details": "Profile bishad", "File a Claim": "Dabi dakhil korun", "Claim status": "Dabir sthiti", "Need help?": "Sahayata lagbe?", "Sign in to EPFO": "EPFO-te sign in korun", "Your retirement account": "Apnar obosor account", "Good afternoon, Rahul": "Nomoskar, Rahul" },
+  mr: { Home: "Mukhya prushtha", Claims: "Daave", "Service history": "Seva itihas", "Profile details": "Profile tapshil", "File a Claim": "Dava dakhla kara", "Claim status": "Davyachi sthiti", "Need help?": "Madat havi?", "Sign in to EPFO": "EPFO madhye sign in kara", "Your retirement account": "Tumche nivrutti khate", "Good afternoon, Rahul": "Namaskar, Rahul" },
+  te: { Home: "Mukhya peji", Claims: "Kleimlu", "Service history": "Seva charitra", "Profile details": "Profile vivaralu", "File a Claim": "Kleim dakhala cheyandi", "Claim status": "Kleim sthiti", "Need help?": "Sahayam kavala?", "Sign in to EPFO": "EPFO lo sign in cheyandi", "Your retirement account": "Mee retirement account", "Good afternoon, Rahul": "Namaskaram, Rahul" },
+  ta: { Home: "Mugappu", Claims: "Koorikkaigal", "Service history": "Sevai varalaru", "Profile details": "Profile vivarangal", "File a Claim": "Koorikkaiyai samarpikkavum", "Claim status": "Koorikkai nilai", "Need help?": "Udhavi venduma?", "Sign in to EPFO": "EPFO-il sign in seyyavum", "Your retirement account": "Ungal retirement account", "Good afternoon, Rahul": "Vanakkam, Rahul" },
+  gu: { Home: "Mukhya", Claims: "Daavao", "Service history": "Seva itihas", "Profile details": "Profile vigato", "File a Claim": "Daavo dakhla karo", "Claim status": "Daavani sthiti", "Need help?": "Madad joie?", "Sign in to EPFO": "EPFO ma sign in karo", "Your retirement account": "Tamaru retirement account", "Good afternoon, Rahul": "Namaste, Rahul" },
+  kn: { Home: "Mukhya puta", Claims: "Kleimgalu", "Service history": "Seva charitre", "Profile details": "Profile vivaragaLu", "File a Claim": "Kleim sallisi", "Claim status": "Kleim sthiti", "Need help?": "Sahaya beke?", "Sign in to EPFO": "EPFO ge sign in maadi", "Your retirement account": "Nimma retirement account", "Good afternoon, Rahul": "Namaskara, Rahul" },
+  ml: { Home: "Home", Claims: "Claimukal", "Service history": "Sevana charithram", "Profile details": "Profile vivarangal", "File a Claim": "Claim samarpikkuka", "Claim status": "Claim nila", "Need help?": "Sahayam venamo?", "Sign in to EPFO": "EPFO-il sign in cheyyuka", "Your retirement account": "Ningalude retirement account", "Good afternoon, Rahul": "Namaskaram, Rahul" },
+  pa: { Home: "Ghar", Claims: "Daave", "Service history": "Seva itihas", "Profile details": "Profile verve", "File a Claim": "Daava darj karo", "Claim status": "Daave di sthiti", "Need help?": "Madad chahidi?", "Sign in to EPFO": "EPFO vich sign in karo", "Your retirement account": "Tuhada retirement account", "Good afternoon, Rahul": "Sat sri akaal, Rahul" },
+  or: { Home: "Mukhya prustha", Claims: "Dabi", "Service history": "Seva itihasa", "Profile details": "Profile bibarana", "File a Claim": "Dabi dakhala karantu", "Claim status": "Dabi sthiti", "Need help?": "Sahayata darkar?", "Sign in to EPFO": "EPFO re sign in karantu", "Your retirement account": "Apankara retirement account", "Good afternoon, Rahul": "Namaskar, Rahul" },
+};
+
 type LanguageContextValue = {
   lang: Lang;
   setLang: (lang: Lang) => void;
@@ -443,7 +459,7 @@ function subscribeLanguage(onStoreChange: () => void) {
 
 function readLanguage(): Lang {
   const stored = window.localStorage.getItem(STORAGE_KEY);
-  return stored === "hi" ? "hi" : "en";
+  return languages.some(({ id }) => id === stored) ? stored as Lang : "en";
 }
 
 function readLanguageServer(): Lang {
@@ -463,11 +479,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const setLang = useCallback((next: Lang) => writeLanguage(next), []);
   const toggle = useCallback(() => writeLanguage(lang === "en" ? "hi" : "en"), [lang]);
 
-  const t = useCallback((text: string) => dict[text]?.[lang] ?? text, [lang]);
+  const t = useCallback((text: string) => lang === "en" ? dict[text]?.en ?? text : romanized[lang]?.[text] ?? dict[text]?.en ?? text, [lang]);
 
   const tpl = useCallback(
     (key: string, params?: Record<string, string>) => {
-      let out = dict[key]?.[lang] ?? key;
+      let out = lang === "en" ? dict[key]?.en ?? key : romanized[lang]?.[key] ?? dict[key]?.en ?? key;
       if (params) {
         for (const [paramKey, value] of Object.entries(params)) {
           out = out.replaceAll(`{${paramKey}}`, value);

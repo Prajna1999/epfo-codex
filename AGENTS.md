@@ -40,4 +40,7 @@ Top-right account hover cards provide identity/KYC context and logout; Profile a
 Employer and principal-employer submitted actions now persist role-scoped browser request trackers, grouped by their originating service page.
 `EPFO_EXPERIENCE_CASE.md` captures the product rationale, grounded in PRD/session context and official EPFO sources, while retaining clear prototype boundaries.
 The experience case also incorporates prior-session decisions: financial-product framing, claim/passbook-first member hierarchy, connected employment evidence, and separate role contexts.
+The language picker now supports English plus Romanized Hindi, Bengali, Marathi, Telugu, Tamil, Gujarati, Kannada, Malayalam, Punjabi and Odia; core navigation/sign-in phrasing is localized and other prototype copy falls back to English.
+The language control is a single native dropdown, rather than separate quick-toggle buttons and a picker.
+The language dropdown has a fixed 156px single-control width, and Passbook exposes the existing statement PDF as a contextual passbook download.
 <!-- END:nextjs-agent-rules -->
