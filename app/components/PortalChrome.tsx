@@ -35,7 +35,7 @@ const navigation: Record<PortalType, NavigationItem[]> = {
   ],
 };
 
-export function PortalTopbar({ mobileOpen, onToggleMobile, onOpenAccount, onLogout, profile = { initials: "RP", name: "Rahul Patil", status: "Verified account", accountId: "UAN 1009 2000 0123", accountStatus: "KYC verified" } }: { mobileOpen: boolean; onToggleMobile: () => void; onOpenAccount?: () => void; onLogout?: () => void; profile?: { initials: string; name: string; status: string; accountId?: string; accountStatus?: string } }) {
+export function PortalTopbar({ mobileOpen, onToggleMobile, onOpenAccount, onOpenAgent, onLogout, profile = { initials: "RP", name: "Rahul Patil", status: "Verified account", accountId: "UAN 1009 2000 0123", accountStatus: "KYC verified" } }: { mobileOpen: boolean; onToggleMobile: () => void; onOpenAccount?: () => void; onOpenAgent?: () => void; onLogout?: () => void; profile?: { initials: string; name: string; status: string; accountId?: string; accountStatus?: string } }) {
   const { t } = useLanguage();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   return (
@@ -44,10 +44,11 @@ export function PortalTopbar({ mobileOpen, onToggleMobile, onOpenAccount, onLogo
         <button className="mobile-menu" onClick={onToggleMobile} aria-label={t("Open navigation")} aria-expanded={mobileOpen}>
           <Icon name="menu" />
         </button>
-        <div className="national-mark">अ</div>
+        <span className="service-mark" aria-hidden="true"><i /><i /><i /></span>
         <div><div className="brand-title">EPFO</div><div className="brand-sub">{t("Your retirement account")}</div></div>
       </div>
       <div className="topbar-actions">
+        {onOpenAgent && <button className="agent-launch" type="button" onClick={onOpenAgent}><Icon name="spark" size={17} /><span>EPF guide</span></button>}
         <div className="notification-wrap">
           <button className="icon-button" aria-label={t("Notifications")} aria-expanded={notificationsOpen} aria-controls="contribution-notification" onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" /><span className="notification-dot" /></button>
           {notificationsOpen && <section id="contribution-notification" className="contribution-notification" aria-label={t("LATEST CONTRIBUTION")}>

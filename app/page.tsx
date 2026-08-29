@@ -1,4 +1,4 @@
-import { MockLogin } from "./components/MockLogin";
+import { AppGate } from "./components/AppGate";
 
 const memberViews = ["Home", "Claims", "Passbook", "ServiceHistory", "Account"];
 
@@ -8,5 +8,5 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
   const initialClaimsTab = tab === "start" ? "start" : "status";
   const initialClaimId = typeof claim === "string" ? claim : undefined;
   const initialMemberId = typeof member === "string" ? member : undefined;
-  return <MockLogin initialNav={initialNav} initialClaimsTab={initialClaimsTab} initialClaimId={initialClaimId} initialMemberId={initialMemberId} initialProfileSection={typeof section === "string" ? section : undefined} />;
+  return <AppGate initialNav={initialNav} initialClaimsTab={initialClaimsTab} initialClaimId={initialClaimId} initialMemberId={initialMemberId} initialProfileSection={typeof section === "string" ? section : undefined} />;
 }

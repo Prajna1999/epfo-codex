@@ -46,6 +46,7 @@ function BalanceCard() {
             <div><span>{t("Employer contributions")}</span><strong>₹1,26,655</strong></div>
           </div>
           <div className="account-number">UAN &nbsp;•••• &nbsp;•••• &nbsp;1234</div>
+          <BalanceTrend />
         </article>
 
         <article className="uan-card card-face card-back" aria-hidden={!cardFlipped}>
@@ -81,6 +82,10 @@ function BalanceCard() {
       )}
     </div>
   );
+}
+
+function BalanceTrend() {
+  return <figure className="balance-trend" aria-hidden="true"><svg viewBox="0 0 300 136" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="balance-area" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#8ecfff" stopOpacity=".14"/><stop offset="1" stopColor="#8ecfff" stopOpacity="0"/></linearGradient></defs><path d="M10 108 58 96 106 100 154 76 202 67 248 42 290 29V126H10Z" fill="url(#balance-area)"/><path d="M10 108 58 96 106 100 154 76 202 67 248 42 290 29" fill="none" stroke="#b6e5ff" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"/></svg></figure>;
 }
 
 function CardDetail({ label, value }: { label: string; value: string }) {

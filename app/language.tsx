@@ -8,6 +8,10 @@ export const languages = [
 export type Lang = (typeof languages)[number]["id"];
 
 const dict: Record<string, { en: string; hi: string }> = {
+  "MINISTRY OF LABOUR & EMPLOYMENT": { en: "MINISTRY OF LABOUR & EMPLOYMENT", hi: "SHRAM AUR ROZGAR MANTRALAYA" },
+  "Social Security, Peace of Mind": { en: "Social Security, Peace of Mind", hi: "Samajik suraksha, mann ki shanti." },
+  "Your work history, savings and protection—connected through one account.": { en: "Your work history, savings and protection—connected through one account.", hi: "Aapki kaam ki history, bachat aur suraksha—ek account se judi hui." },
+  "A calmer way to manage your provident fund.": { en: "A calmer way to manage your provident fund.", hi: "Apne provident fund ko sambhalne ka aasaan tareeka." },
   "Open navigation": { en: "Open navigation", hi: "Navigation kholen" },
   "Employees' Provident Fund Organisation": { en: "Employees' Provident Fund Organisation", hi: "कर्मचारी भविष्य निधि संगठन" },
   "SECURE ACCESS": { en: "SECURE ACCESS", hi: "सुरक्षित प्रवेश" },
@@ -54,8 +58,8 @@ const dict: Record<string, { en: string; hi: string }> = {
   "PF Code / registered ID": { en: "PF Code / registered ID", hi: "PF कोड / पंजीकृत ID" },
   Password: { en: "Password", hi: "पासवर्ड" },
   "A one-time password was sent to your registered mobile number.": { en: "A one-time password was sent to your registered mobile number.", hi: "आपके पंजीकृत मोबाइल नंबर पर एक OTP भेजा गया है।" },
-  "Mock OTP: 123456": { en: "Mock OTP: 123456", hi: "मॉक OTP: 123456" },
-  "Enter the mock OTP shown above.": { en: "Enter the mock OTP shown above.", hi: "ऊपर दिया मॉक OTP डालें।" },
+  "Prototype sign-in: any 6-digit code is accepted.": { en: "Prototype sign-in: any 6-digit code is accepted.", hi: "Prototype sign-in: koi bhi 6-digit code accept hoga." },
+  "Enter a 6-digit code to continue.": { en: "Enter a 6-digit code to continue.", hi: "Aage badhne ke liye 6-digit code daalein." },
   "Verify and sign in": { en: "Verify and sign in", hi: "सत्यापित करें और साइन इन करें" },
   "Use a different account": { en: "Use a different account", hi: "दूसरा अकाउंट इस्तेमाल करें" },
   "Verifying your details": { en: "Verifying your details", hi: "आपकी जानकारी सत्यापित की जा रही है" },

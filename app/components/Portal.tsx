@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "../language";
 import { EmploymentHistory } from "./EmploymentHistory";
@@ -10,10 +10,13 @@ import { MemberDashboard } from "./MemberDashboard";
 import { Passbook } from "./Passbook";
 import { PortalSidebar, PortalTopbar } from "./PortalChrome";
 import { AccountProfile } from "./AccountProfile";
+import { EpfAgent } from "./EpfAgent";
 
 export function Portal({ initialNav = "Home", initialClaimsTab = "status", initialClaimId, initialMemberId, initialProfileSection, onLogout }: { initialNav?: string; initialClaimsTab?: "start" | "status"; initialClaimId?: string; initialMemberId?: string; initialProfileSection?: string; onLogout?: () => void }) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
+  const [agentWidth, setAgentWidth] = useState(420);
   const activeNav = initialNav;
   const isHome = activeNav === "Home";
 
@@ -30,11 +33,11 @@ export function Portal({ initialNav = "Home", initialClaimsTab = "status", initi
   };
 
   return (
-    <main className="app-shell">
-      <PortalTopbar mobileOpen={mobileOpen} onToggleMobile={() => setMobileOpen(!mobileOpen)} onOpenAccount={() => navigate("Account")} onLogout={onLogout} />
+    <main className="app-shell" style={{ "--agent-width": `${agentWidth}px` } as CSSProperties}>
+      <PortalTopbar mobileOpen={mobileOpen} onToggleMobile={() => setMobileOpen(!mobileOpen)} onOpenAccount={() => navigate("Account")} onOpenAgent={() => setAgentOpen(true)} onLogout={onLogout} />
       <PortalSidebar type="member" activeNav={activeNav} mobileOpen={mobileOpen} onNavigate={navigate} onClose={() => setMobileOpen(false)} />
 
-      <section key={activeNav} className="content page-enter">
+      <section key={activeNav} className={`content page-enter${agentOpen ? " agent-open" : ""}`}>
         <PageHeader activeNav={activeNav} />
         {activeNav === "Passbook" ? (
           <Passbook initialMemberId={initialMemberId} />
@@ -50,6 +53,7 @@ export function Portal({ initialNav = "Home", initialClaimsTab = "status", initi
           <MemberDashboard onNavigate={navigate} />
         )}
       </section>
+      {agentOpen && <EpfAgent onClose={() => setAgentOpen(false)} onNavigate={navigate} width={agentWidth} onResize={setAgentWidth} />}
     </main>
   );
 }
