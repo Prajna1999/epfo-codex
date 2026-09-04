@@ -48,8 +48,8 @@ export const purposeQuestions: Record<string, string> = {
 
 export function memberDetails(type: ClaimType | "") {
   return type === "advance"
-    ? { employer: "Infosys Limited", joined: "1 Jul 2023", left: "Currently employed" }
-    : { employer: "Techcore Systems", joined: "1 Apr 2021", left: "30 Jun 2023" };
+    ? { employer: "Infosys Limited", joined: "3 Nov 2025", left: "Currently employed" }
+    : { employer: "Civic Data Labs", joined: "12 Aug 2023", left: "18 Oct 2025" };
 }
 
 export function legacyForm(type: ClaimType | "") {

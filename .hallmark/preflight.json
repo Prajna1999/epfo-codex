@@ -1,0 +1,8 @@
+{
+  "date": "2026-09-04",
+  "framework": "Next.js 16.3.2 app router",
+  "font": "Existing app sans and serif roles",
+  "palette": "Existing cool institutional OKLCH token system",
+  "motion": "CSS transitions only",
+  "spacing": "Existing 4pt scale"
+}

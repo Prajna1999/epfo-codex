@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useLanguage } from "../language";
 import { Icon, type IconName } from "./Icon";
+import { memberBalance, members, totalEpfBalance } from "./passbook-data";
 
 type Navigate = (item: string, tab?: "start" | "status", claimId?: string, memberId?: string, section?: string) => void;
 
@@ -23,6 +24,8 @@ function BalanceCard() {
   const { t } = useLanguage();
   const [cardFlipped, setCardFlipped] = useState(false);
   const flipCard = () => setCardFlipped((flipped) => !flipped);
+  const current = members.find((member) => member.status === "active")!;
+  const transferable = members.find((member) => member.status === "transferable")!;
 
   return (
     <div className={`card-flip-shell ${cardFlipped ? "is-flipped" : ""}`}>
@@ -39,11 +42,11 @@ function BalanceCard() {
           <p>
             {t("Total PF balance")} <span className="info" title={t("This is your recorded PF balance, not an immediately claimable amount.")}>i</span>
           </p>
-          <h2>₹4,52,340<span>.00</span></h2>
+          <h2>₹{totalEpfBalance().toLocaleString("en-IN")}<span>.00</span></h2>
           <p className="balance-caption">{t("Recorded balance · Updated 18 Aug 2026")}</p>
           <div className="balance-breakdown">
-            <div><span>{t("Your contributions")}</span><strong>₹3,25,685</strong></div>
-            <div><span>{t("Employer contributions")}</span><strong>₹1,26,655</strong></div>
+            <div><span>{t("Current Member ID")}</span><strong>₹{memberBalance(current).toLocaleString("en-IN")}</strong></div>
+            <div><span>{t("Transfer available")}</span><strong>₹{memberBalance(transferable).toLocaleString("en-IN")}</strong></div>
           </div>
           <div className="account-number">UAN &nbsp;•••• &nbsp;•••• &nbsp;1234</div>
           <BalanceTrend />
@@ -116,15 +119,15 @@ function ServiceCard({ icon, title, text, onClick }: { icon: IconName; title: st
 
 function RecentActivityCard({ onNavigate }: { onNavigate: Navigate }) {
   const { t } = useLanguage();
+  const current = members.find((member) => member.status === "active")!;
+  const latest = current.passbooks.at(-1)!.entries.filter((entry) => entry.category === "contribution").slice(-3).reverse();
   return (
     <article className="panel transactions-panel">
       <div className="panel-head">
         <div><p className="eyebrow">{t("PASSBOOK")}</p><h2>{t("Recent activity")}</h2></div>
         <button onClick={() => onNavigate("Passbook")}>{t("View all transactions")} <Icon name="arrow" size={15} /></button>
       </div>
-      <Transaction icon="building" title={t("August contribution")} detail="Infosys Limited · 18 Aug 2026" amount="+ ₹8,430" />
-      <Transaction icon="building" title={t("July contribution")} detail="Infosys Limited · 18 Jul 2026" amount="+ ₹8,430" />
-      <Transaction icon="payment" title={t("Annual interest credit")} detail="FY 2025–26 · 31 Mar 2026" amount="+ ₹31,240" />
+      {latest.map((entry) => <Transaction key={entry.reference} icon="building" title={entry.particulars} detail={`Infosys Limited · ${entry.date} · EE ₹${entry.employeeShare?.toLocaleString("en-IN")} · ER ₹${entry.employerShare?.toLocaleString("en-IN")}`} amount={`+ ₹${entry.amount.toLocaleString("en-IN")}`} />)}
     </article>
   );
 }

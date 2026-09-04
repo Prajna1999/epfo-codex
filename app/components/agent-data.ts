@@ -1,10 +1,12 @@
-import { members, passbookTotals } from "./passbook-data";
+import { rahulProfile } from "./finance-profile-data";
+import { members, totalEpfBalance } from "./passbook-data";
 import { serviceRecords } from "./service-history-data";
 
 const TODAY = new Date("2026-08-28");
 const DOB = new Date(1992, 4, 14);
-const RETIREMENT_AGE = 58;
-const EPF_RATE = 0.0825;
+const RETIREMENT_AGE = rahulProfile.retirement.age;
+const EPF_RATE = rahulProfile.epf.interestRate;
+const ANNUAL_CONTRIBUTION_GROWTH = rahulProfile.epf.annualContributionGrowth;
 const EPS_DIVISOR = 70;
 const PENSIONABLE_SALARY_CAP = 15000;
 const MIN_PENSION = 1000;
@@ -38,10 +40,7 @@ function retirementDate(): Date {
 }
 
 function currentBalance(): number {
-  const account = members.find((member) => member.label.includes("Current"));
-  const book = account?.passbooks[account.passbooks.length - 1];
-  if (!account || !book) return 0;
-  return passbookTotals(book.openingBalance, book.entries).closingBalance;
+  return totalEpfBalance();
 }
 
 function serviceMonths(record: { joined: string; exited: string; status: string }, upTo: Date): number {
@@ -55,12 +54,12 @@ export type ContributionCheck = { ok: boolean; message: string };
 export function checkContributionHealth(): ContributionCheck {
   const account = members.find((member) => member.label.includes("Current"));
   const latestBook = account?.passbooks[account.passbooks.length - 1];
-  const credits = latestBook?.entries.filter((entry) => entry.particulars === "PF contribution") ?? [];
+  const credits = latestBook?.entries.filter((entry) => entry.category === "contribution") ?? [];
   if (!account || !latestBook || credits.length === 0) {
     return { ok: false, message: "No contribution credits are recorded yet for the current financial year." };
   }
   const latest = credits[credits.length - 1];
-  return { ok: true, message: `${latest.date} · ₹${latest.amount.toLocaleString("en-IN")} from ${account.label.split(" · ")[0]} is your latest recorded contribution. No missing months in ${latestBook.year}.` };
+  return { ok: true, message: `${latest.date} · ₹${latest.amount.toLocaleString("en-IN")} credited to EPF (₹${latest.employeeShare?.toLocaleString("en-IN")} employee + ₹${latest.employerShare?.toLocaleString("en-IN")} employer), with ₹${latest.pensionShare?.toLocaleString("en-IN")} allocated to EPS. All five expected deposits for ${latestBook.year} are recorded.` };
 }
 
 export type EligibilityResult = { purpose: string; eligible: boolean; capNote: string; eligibleFrom?: string };
@@ -107,14 +106,16 @@ export type CorpusPoint = { year: number; balance: number };
 
 function compoundSeries(startBalance: number, monthlyContribution: number, monthsRemaining: number, startYear: number): { points: CorpusPoint[]; final: number } {
   let balance = startBalance;
+  let monthly = monthlyContribution;
   const points: CorpusPoint[] = [{ year: startYear, balance: Math.round(balance) }];
   const fullYears = Math.floor(monthsRemaining / 12);
   const remainderMonths = monthsRemaining % 12;
   for (let year = 0; year < fullYears; year += 1) {
-    balance = (balance + monthlyContribution * 12) * (1 + EPF_RATE);
+    balance = (balance + monthly * 12) * (1 + EPF_RATE);
     points.push({ year: startYear + year + 1, balance: Math.round(balance) });
+    monthly *= 1 + ANNUAL_CONTRIBUTION_GROWTH;
   }
-  balance += monthlyContribution * remainderMonths;
+  balance += monthly * remainderMonths;
   if (remainderMonths > 0) points.push({ year: startYear + fullYears + 1, balance: Math.round(balance) });
   return { points, final: balance };
 }
@@ -126,7 +127,7 @@ function compound(startBalance: number, monthlyContribution: number, monthsRemai
 export function projectRetirementCorpus(oneTimeWithdrawal = 0): RetirementProjection {
   const retireDate = retirementDate();
   const monthsRemaining = Math.max(0, monthsBetween(TODAY, retireDate));
-  const monthlyContribution = 8430;
+  const monthlyContribution = rahulProfile.epf.employeeContribution + rahulProfile.epf.employerEpfContribution;
   const startBalance = Math.max(0, currentBalance() - oneTimeWithdrawal);
   return { retirementYear: retireDate.getFullYear(), yearsRemaining: Math.round((monthsRemaining / 12) * 10) / 10, projectedCorpus: Math.round(compound(startBalance, monthlyContribution, monthsRemaining)), monthlyContribution, rate: EPF_RATE };
 }
@@ -134,7 +135,7 @@ export function projectRetirementCorpus(oneTimeWithdrawal = 0): RetirementProjec
 export function projectRetirementSeries(oneTimeWithdrawal = 0): CorpusPoint[] {
   const retireDate = retirementDate();
   const monthsRemaining = Math.max(0, monthsBetween(TODAY, retireDate));
-  const monthlyContribution = 8430;
+  const monthlyContribution = rahulProfile.epf.employeeContribution + rahulProfile.epf.employerEpfContribution;
   const startBalance = Math.max(0, currentBalance() - oneTimeWithdrawal);
   return compoundSeries(startBalance, monthlyContribution, monthsRemaining, TODAY.getFullYear()).points;
 }
@@ -183,7 +184,7 @@ export function contributionHistory(): YearContribution[] {
   const account = members.find((member) => member.label.includes("Current"));
   if (!account) return [];
   const summaries = account.passbooks.map((book) => {
-    const monthlyAmounts = book.entries.filter((entry) => entry.particulars === "PF contribution").map((entry) => entry.amount);
+    const monthlyAmounts = book.entries.filter((entry) => entry.category === "contribution").map((entry) => entry.amount);
     const total = monthlyAmounts.reduce((sum, amount) => sum + amount, 0);
     const average = monthlyAmounts.length ? total / monthlyAmounts.length : 0;
     return { year: book.year, monthlyAmounts, total, average, latest: monthlyAmounts[monthlyAmounts.length - 1] ?? 0 };
@@ -209,11 +210,12 @@ export function serviceTimeline(): TimelineSegment[] {
 
 export type DataPoint = { label: string; value: number };
 
-// Matches the split already shown on the member's Home balance card — not a new figure invented for this chart.
+// Uses the same recorded non-transferred contribution entries as the passbook.
 export function contributionSplit(): DataPoint[] {
+  const contributions = members.filter((member) => member.status !== "transferred").flatMap((member) => member.passbooks.flatMap((book) => book.entries)).filter((entry) => entry.category === "contribution");
   return [
-    { label: "Your contributions", value: 325685 },
-    { label: "Employer contributions", value: 126655 },
+    { label: "Your contributions", value: contributions.reduce((total, entry) => total + (entry.employeeShare ?? 0), 0) },
+    { label: "Employer EPF", value: contributions.reduce((total, entry) => total + (entry.employerShare ?? 0), 0) },
   ];
 }
 
@@ -221,7 +223,7 @@ export function contributionSplit(): DataPoint[] {
 export function contributionByEmployer(): DataPoint[] {
   return members.map((account) => {
     const employer = serviceRecords.find((record) => record.id === account.id)?.employer ?? account.label.split(" · ")[0];
-    const total = account.passbooks.reduce((sum, book) => sum + book.entries.filter((entry) => entry.particulars === "PF contribution").reduce((entrySum, entry) => entrySum + entry.amount, 0), 0);
+    const total = account.passbooks.reduce((sum, book) => sum + book.entries.filter((entry) => entry.category === "contribution").reduce((entrySum, entry) => entrySum + entry.amount, 0), 0);
     return { label: employer, value: total };
   });
 }
@@ -267,5 +269,5 @@ export function buildGenericSeries(source: DataSource, amount: number | null, ma
     const missing = employersMissingLedger();
     return { title: "Total PF contribution by employer", unit: "currency", points, note: missing.length ? `No recorded PF ledger for ${missing.join(", ")} in this preview, so ${missing.length > 1 ? "they aren't" : "it isn't"} included.` : undefined };
   }
-  return { title: "PF balance by contributor", unit: "currency", points: contributionSplit() };
+  return { title: "Recorded EPF contributions by contributor", unit: "currency", points: contributionSplit(), note: "Transfers and interest are excluded; EPS is tracked separately." };
 }
