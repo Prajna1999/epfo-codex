@@ -2,38 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { buildGenericSeries, checkAdvanceEligibility, checkClaimReadiness, checkContributionHealth, contributionHistory, findEligibleTransfer, pensionAtAge, projectPension, projectRetirementCorpus, projectRetirementSeries, projectWithdrawalImpact, serviceTimeline, UNRATED_PURPOSES, type ContributionCheck, type CorpusPoint, type DataPoint, type EligibilityResult, type ReadinessItem, type RetirementProjection, type TimelineSegment, type YearContribution } from "./agent-data";
-import { cohortBenchmark, percentileForBalance, providerAccounts, rahulProfile } from "./finance-profile-data";
+import { buildGenericSeries, checkAdvanceEligibility, checkContributionHealth, contributionHistory, findEligibleTransfer, pensionAtAge, projectPension, projectRetirementCorpus, projectRetirementSeries, projectWithdrawalImpact, serviceTimeline, UNRATED_PURPOSES, type CorpusPoint, type DataPoint, type EligibilityResult, type TimelineSegment, type YearContribution } from "./agent-data";
+import { cohortBenchmark, DEFAULT_PROVIDER_SCOPES, percentileForBalance, PROVIDER_SCOPES, providerAccounts, rahulProfile, type ProviderConnections, type ProviderScopeId, type ProviderScopes } from "./finance-profile-data";
 import { Icon, type IconName } from "./Icon";
 import { totalEpfBalance } from "./passbook-data";
-
-type Insight = { id: "contribution" | "eligibility" | "readiness" | "retirement" | "pension"; title: string; description: string; icon: IconName };
-const insights: Insight[] = [
-  { id: "contribution", title: "Check my latest contribution", description: "Compares your latest deposit against the passbook.", icon: "book" },
-  { id: "eligibility", title: "Check advance eligibility", description: "Checks EPFO's service-duration rules against your join date.", icon: "shield" },
-  { id: "readiness", title: "Check claim readiness", description: "Checks Aadhaar, PAN, bank and nomination status.", icon: "user" },
-  { id: "retirement", title: "Project my retirement corpus", description: "Compounds your balance and contributions to age 58 at today's declared EPF rate.", icon: "payment" },
-  { id: "pension", title: "Estimate my monthly pension", description: "Applies EPFO's EPS formula to your projected service at retirement.", icon: "briefcase" },
-];
+import { simulateJobLoss, simulateMarketDrawdown, simulateMedicalEmergency, type ScenarioId, type ScenarioResult } from "./scenario-data";
 
 type AgentAction = { id: string; title: string; detail: string; impact: "Reversible" | "Irreversible"; icon: IconName; destination: "Claims" | "Account"; tab?: "start" | "status"; section?: string };
 
-type Selection = { kind: "insight"; item: Insight } | { kind: "action"; item: AgentAction };
+type Selection = { kind: "action"; item: AgentAction };
 type BackendActivity = { state: "working" | "success" | "error"; message: string };
+type ChatTurn = { id: string; question: string; status: "loading" | "done" | "error"; answer: AskAnswer | null };
 
 export function EpfAgent({ onClose, onNavigate }: { onClose: () => void; onNavigate: (item: string, tab?: "start" | "status", claimId?: string, memberId?: string, section?: string) => void }) {
-  const [mode, setMode] = useState<"chat" | "plan">("chat");
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [selected, setSelected] = useState<Selection | null>(null);
+  const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [permissions, setPermissions] = useState({ epfo: true, cohort: true });
-  const [connected, setConnected] = useState<string[]>([]);
-  const [passbookSync, setPassbookSync] = useState<"idle" | "syncing" | "success" | "error">("idle");
+  const [connections, setConnections] = useState<ProviderConnections>({});
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [activity, setActivity] = useState<BackendActivity | null>(null);
 
-  const contribution = useMemo(() => checkContributionHealth(), []);
   const eligibility = useMemo(() => checkAdvanceEligibility(), []);
-  const readiness = useMemo(() => checkClaimReadiness(), []);
   const transferLead = useMemo(() => findEligibleTransfer(), []);
 
   const actions = useMemo<AgentAction[]>(() => {
@@ -43,12 +33,6 @@ export function EpfAgent({ onClose, onNavigate }: { onClose: () => void; onNavig
     return list;
   }, [transferLead]);
 
-  const briefText = transferLead
-    ? `Your ${transferLead.employer} PF account is eligible to transfer into your current Member ID.`
-    : contribution.ok
-      ? "Your account looks healthy — no gaps or pending actions found."
-      : contribution.message;
-
   const continueAction = () => {
     if (!selected || selected.kind !== "action") return;
     const { item } = selected;
@@ -56,7 +40,7 @@ export function EpfAgent({ onClose, onNavigate }: { onClose: () => void; onNavig
     onClose();
   };
 
-  const runBackendAction = async (action: "permission" | "connect" | "disconnect", target: string, working: string, success: string) => {
+  const runBackendAction = async (action: "permission" | "connect" | "disconnect" | "scope", target: string, working: string, success: string) => {
     setPendingAction(`${action}:${target}`);
     setActivity({ state: "working", message: working });
     try {
@@ -80,114 +64,68 @@ export function EpfAgent({ onClose, onNavigate }: { onClose: () => void; onNavig
   };
 
   const toggleProvider = async (provider: string) => {
-    const isConnected = connected.includes(provider);
+    const isConnected = provider in connections;
     const action = isConnected ? "disconnect" : "connect";
-    if (await runBackendAction(action, provider, `${isConnected ? "Revoking" : "Requesting"} ${provider} read-only access…`, `${provider} ${isConnected ? "disconnected" : "connected with read-only access"}.`)) {
-      setConnected((items) => isConnected ? items.filter((item) => item !== provider) : [...items, provider]);
+    if (await runBackendAction(action, provider, `${isConnected ? "Revoking" : "Requesting"} ${provider} access…`, `${provider} ${isConnected ? "disconnected" : "connected — sharing portfolio value only"}.`)) {
+      setConnections((current) => {
+        if (!isConnected) return { ...current, [provider]: { ...DEFAULT_PROVIDER_SCOPES } };
+        const next = { ...current };
+        delete next[provider];
+        return next;
+      });
     }
   };
 
-  const refreshPassbook = async () => {
-    setPassbookSync("syncing");
-    setPendingAction("refresh:passbook");
-    setActivity({ state: "working", message: "Fetching your latest EPFO ledger…" });
-    try {
-      const response = await fetch("/api/passbook", { cache: "no-store" });
-      if (!response.ok) throw new Error("Passbook refresh failed");
-      const data: unknown = await response.json();
-      if (!data || typeof data !== "object" || !("members" in data) || !Array.isArray(data.members)) throw new Error("Invalid passbook response");
-      setPassbookSync("success");
-      setActivity({ state: "success", message: "Passbook checked against the server record." });
-    } catch {
-      setPassbookSync("error");
-      setActivity({ state: "error", message: "The server couldn’t refresh your passbook. Try again." });
-    } finally {
-      setPendingAction(null);
+  const toggleScope = async (provider: string, scope: ProviderScopeId) => {
+    const current = connections[provider];
+    if (!current) return;
+    const next = !current[scope];
+    const label = PROVIDER_SCOPES.find((item) => item.id === scope)?.label ?? scope;
+    if (await runBackendAction("scope", `${provider}:${scope}`, `${next ? "Sharing" : "Hiding"} ${label.toLowerCase()} with the agent…`, `${provider}: ${label.toLowerCase()} ${next ? "shared" : "hidden"}.`)) {
+      setConnections((value) => ({ ...value, [provider]: { ...value[provider]!, [scope]: next } }));
     }
   };
 
   return <div className="finance-workspace">
-    <header className="finance-workspace-head">
-      <button type="button" className="finance-back" onClick={onClose}><Icon name="arrow" size={16} /> Back to EPFO</button>
-      <div className="finance-title"><span className="finance-agent-mark"><Icon name="spark" size={19} /></span><div><p>PERSONAL FINANCE WORKSPACE</p><h1 id="epf-agent-title">Retirement command centre</h1><span>Ask, model and keep one clear financial plan.</span></div></div>
-      <div className="finance-security"><Icon name="shield" size={16} /><span><strong>Private by design</strong>Read-only access · every action asks first</span></div>
-    </header>
+    <h1 className="finance-workspace-title">Finance</h1>
+    <button type="button" className="finance-account-toggle" onClick={() => setSourcesOpen(true)} aria-label="Account access and eligibility" title="Account access and eligibility"><Icon name="settings" size={16} /></button>
     <div className="finance-workbench">
-      <div className="finance-modebar">
-        <div role="tablist" aria-label="Workspace view"><button type="button" role="tab" aria-selected={mode === "chat"} className={mode === "chat" ? "is-active" : ""} onClick={() => { setSelected(null); setMode("chat"); }}>Chat</button><button type="button" role="tab" aria-selected={mode === "plan"} className={mode === "plan" ? "is-active" : ""} onClick={() => { setSelected(null); setMode("plan"); }}>Plan</button></div>
-        <button type="button" className="finance-sources-button" onClick={() => setSourcesOpen(true)}><Icon name="shield" size={15} /> Sources <span>{connected.length + 1}</span></button>
-      </div>
       <main className="finance-main">
-      {!permissions.epfo ? <section className="finance-data-locked"><span><Icon name="shield" size={24} /></span><h2>Your EPFO data is private</h2><p>Account questions, simulations and actions are paused. Re-enable EPFO financial record access in Sources when you want to continue.</p></section> : selected?.kind === "action" ? <section className="agent-confirm finance-focus-panel">
-        <button className="agent-back" type="button" onClick={() => setSelected(null)}>← Back to tasks</button>
+      {selected?.kind === "action" ? <section className="agent-confirm finance-focus-panel">
+        <button className="agent-back" type="button" onClick={() => setSelected(null)}>← Back to chat</button>
         <p className="eyebrow">CONFIRM BEFORE CONTINUING</p><span className={`agent-impact ${selected.item.impact.toLowerCase().replace("-", "")}`}>{selected.item.impact}</span>
         <h3>{selected.item.title}</h3><p>{selected.item.detail}</p>
         <dl><div><dt>What will happen</dt><dd>Open the relevant EPFO workspace. Nothing will be submitted.</dd></div><div><dt>Your control</dt><dd>You review each detail and approve the final request separately.</dd></div></dl>
         <button className="primary-button" type="button" onClick={continueAction}>I understand — continue</button>
         <button className="agent-cancel" type="button" onClick={() => setSelected(null)}>Cancel</button>
-      </section> : selected?.kind === "insight" ? <section className="agent-confirm finance-focus-panel">
-        <button className="agent-back" type="button" onClick={() => setSelected(null)}>← Back to tasks</button>
-        <p className="eyebrow">ACCOUNT INSIGHT</p>
-        <h3>{selected.item.title}</h3>
-        {selected.item.id === "contribution" && <ContributionInsight result={contribution} />}
-        {selected.item.id === "eligibility" && <EligibilityInsight results={eligibility} />}
-        {selected.item.id === "readiness" && <ReadinessInsight items={readiness} />}
-        {selected.item.id === "retirement" && <RetirementInsight />}
-        {selected.item.id === "pension" && <PensionInsight />}
-        <button className="agent-cancel" type="button" onClick={() => setSelected(null)}>Back to tasks</button>
-      </section> : <>
-        <section className="finance-chat-view" hidden={mode !== "chat"}>
-        <section className="finance-grid">
-          <CohortCard enabled={permissions.cohort} />
-          <ScenarioLab onOpen={() => setSelected({ kind: "insight", item: insights[3] })} />
-        </section>
-        <button type="button" className="agent-brief finance-next-action" onClick={() => actions[0] && setSelected({ kind: "action", item: actions[0] })}><span><Icon name={transferLead ? "briefcase" : "shield"} size={18} /></span><div><strong>{transferLead ? "One account move to consider" : "Your EPF account is on track"}</strong><p>{briefText}</p></div><Icon name="arrow" size={16} /></button>
-        <AskInWords eligibility={eligibility} />
-        </section>
-        <section className="finance-plan-view" hidden={mode !== "plan"}><PlanPanel connected={connected} onChat={() => setMode("chat")} onTransfer={() => actions[0] && setSelected({ kind: "action", item: actions[0] })} /></section>
-      </>}
+      </section> : <section className="finance-chat-view">
+        <AskInWords eligibility={eligibility} connections={connections} actions={actions} turns={turns} setTurns={setTurns} pendingAction={pendingAction} epfoConnected={permissions.epfo} onToggleEpfo={() => updatePermission("epfo")} cohortEnabled={permissions.cohort} onToggleProvider={toggleProvider} onToggleScope={toggleScope} onOpenAction={(action) => setSelected({ kind: "action", item: action })} />
+      </section>}
       </main>
-      {sourcesOpen && <><button type="button" className="finance-source-scrim" aria-label="Close Sources" onClick={() => setSourcesOpen(false)} /><aside className="finance-access" aria-label="Data access controls">
-        <div className="finance-access-head"><span><Icon name="shield" size={17} /></span><div><strong>Your data perimeter</strong><small>You decide what the agent can read.</small></div><button type="button" onClick={() => setSourcesOpen(false)} aria-label="Close Sources"><Icon name="close" size={17} /></button></div>
-        {activity && <div className={`finance-backend-status is-${activity.state}`} role="status" aria-live="polite"><span aria-hidden="true">{activity.state === "working" ? "" : activity.state === "success" ? "✓" : "!"}</span><div><strong>{activity.state === "working" ? "Working securely" : activity.state === "success" ? "Server updated" : "Action incomplete"}</strong><small>{activity.message}</small></div></div>}
-        <PermissionRow title="EPFO financial record" detail={pendingAction === "permission:epfo" ? "Saving access preference…" : "Balance, passbook, claims and service history"} checked={permissions.epfo} pending={pendingAction === "permission:epfo"} disabled={pendingAction !== null} onChange={() => updatePermission("epfo")} />
-        <div className={`finance-passbook-sync is-${passbookSync}`} aria-live="polite"><span><Icon name="book" size={17} /></span><div><strong>EPFO passbook</strong><small>{passbookSync === "syncing" ? "Checking the server record…" : passbookSync === "success" ? "Up to date · refreshed just now" : passbookSync === "error" ? "Couldn’t refresh · try again" : "Last synced 18 Aug 2026"}</small></div><button type="button" onClick={refreshPassbook} disabled={!permissions.epfo || pendingAction !== null}>{passbookSync === "syncing" ? <><span className="finance-button-spinner" aria-hidden="true" />Refreshing…</> : "Refresh"}</button></div>
+      {sourcesOpen && <><button type="button" className="finance-source-scrim" aria-label="Close account settings" onClick={() => setSourcesOpen(false)} /><aside className="finance-access" role="dialog" aria-modal="true" aria-label="Account access and eligibility">
+        <div className="finance-access-head"><div><strong>Account access</strong><small>What the agent can use, and where you stand.</small></div><button type="button" onClick={() => setSourcesOpen(false)} aria-label="Close account settings"><Icon name="close" size={17} /></button></div>
+        {activity && <div className={`finance-backend-status is-${activity.state}`} role="status" aria-live="polite"><span aria-hidden="true">{activity.state === "working" ? "" : activity.state === "success" ? "✓" : "!"}</span><div><strong>{activity.state === "working" ? "Working…" : activity.state === "success" ? "Updated" : "Couldn't complete"}</strong><small>{activity.message}</small></div></div>}
+        <div className="finance-passbook-sync is-success"><span><Icon name="book" size={17} /></span><div><strong>EPFO passbook</strong><small>{permissions.epfo ? "Connected · last synced 28 Aug 2026" : "Paused — connect it next to the message box"}</small></div></div>
+        {permissions.epfo && <section className="finance-eligibility" aria-label="Advance and withdrawal eligibility">
+          <h3>Advance &amp; withdrawal eligibility</h3>
+          <dl>
+            {eligibility.map((result) => <div key={result.purpose}>
+              <dt>{result.purpose}<i className={`agent-impact ${result.eligible ? "ok" : ""}`}>{result.eligible ? "Eligible now" : `From ${result.eligibleFrom}`}</i></dt>
+              <dd>Advance cap: {result.capNote}.</dd>
+            </div>)}
+          </dl>
+          <p>{UNRATED_PURPOSES.join(", ")} advances don&apos;t have a published minimum-service rule in this preview — check with EPFO directly.</p>
+        </section>}
         <PermissionRow title="Anonymous cohort data" detail={pendingAction === "permission:cohort" ? "Saving access preference…" : "Age 32–36 · technology · 7–10 years' service"} checked={permissions.cohort} pending={pendingAction === "permission:cohort"} disabled={pendingAction !== null} onChange={() => updatePermission("cohort")} />
-        <p className="finance-access-note">Permissions apply to this workspace only. No provider can see another provider&apos;s data.</p>
-        <div className="finance-provider-head"><div><strong>Connected finance</strong><small>Bring your full retirement picture together.</small></div><button type="button">Browse plugins</button></div>
-        <div className="finance-providers">{providerAccounts.map((provider) => { const isConnected = connected.includes(provider.name); const isPending = pendingAction?.endsWith(`:${provider.name}`); return <div key={provider.name}><span aria-hidden="true">{provider.name[0]}</span><div><strong>{provider.name}</strong><small>{isPending ? "Verifying authorization with provider…" : isConnected ? `${provider.account} · ${formatCompactRupees(provider.value)} · ${provider.holdings} holdings` : "Stocks & mutual funds · read-only"}</small>{isConnected && !isPending && <small className="finance-provider-mix">{provider.mix} · gain {formatCompactRupees(provider.value - provider.invested)}</small>}</div><button type="button" className={isConnected ? "is-connected" : ""} onClick={() => toggleProvider(provider.name)} disabled={pendingAction !== null}>{isPending ? <><span className="finance-button-spinner" aria-hidden="true" />{isConnected ? "Disconnecting…" : "Connecting…"}</> : isConnected ? "Disconnect" : "Connect"}</button></div>; })}</div>
-        <div className="finance-session"><span /><div><strong>Secure session</strong><small>Protected with Aadhaar verification</small></div></div>
+        <p className="finance-access-note">Permissions apply to this workspace only. No provider can see another provider&apos;s data. Connected brokerages and your EPFO passbook live next to the message box, not here.</p>
       </aside></>}
     </div>
-    <footer className="finance-footer"><span><Icon name="shield" size={14} /> Guidance, not financial advice</span><span>Illustrative cohort · EPFO rules apply · Last data sync 18 Aug 2026</span></footer>
+    <footer className="finance-footer"><span>Guidance, not financial advice</span><span>Illustrative cohort · EPFO rules apply · Last data sync 28 Aug 2026</span></footer>
   </div>;
-}
-
-function PlanPanel({ connected, onChat, onTransfer }: { connected: string[]; onChat: () => void; onTransfer: () => void }) {
-  const projection = useMemo(() => projectRetirementCorpus(), []);
-  const target = rahulProfile.retirement.targetCorpus;
-  const gap = Math.max(0, target - projection.projectedCorpus);
-  const progress = Math.min(100, Math.round((projection.projectedCorpus / target) * 100));
-  const connectedValue = providerAccounts.filter((provider) => connected.includes(provider.name)).reduce((total, provider) => total + provider.value, 0);
-  return <article className="finance-plan"><header><div><p>YOUR LIVING PLAN</p><h2>Build {formatCompactRupees(target)} by {projection.retirementYear}</h2><span>Nominal retirement target · personal assumptions, not advice</span></div><button type="button" onClick={onChat}>Ask to change it</button></header><div className="finance-plan-metrics"><div><small>Total PF now</small><strong>{formatCompactRupees(totalEpfBalance())}</strong></div><div><small>Connected investments</small><strong>{connectedValue ? formatCompactRupees(connectedValue) : "Not linked"}</strong></div><div><small>Projected EPF at 58</small><strong>{formatCompactRupees(projection.projectedCorpus)}</strong></div></div><section className="finance-plan-progress"><div><strong>{progress}% of target covered by projected EPF</strong><span>{projection.yearsRemaining} years · {formatCompactRupees(gap)} remaining</span></div><i><b style={{ width: `${progress}%` }} /></i></section><section className="finance-plan-steps"><h3>Next steps</h3><button type="button" onClick={onTransfer}><span>1</span><div><strong>Transfer ₹2.85L from Civic Data Labs</strong><small>One balance is still outside the active Member ID.</small></div><Icon name="arrow" size={16} /></button><button type="button" onClick={onChat}><span>2</span><div><strong>Allocate part of the ₹63k monthly surplus</strong><small>Model retirement and near-term goals before changing investments.</small></div><Icon name="arrow" size={16} /></button></section><details><summary>Planning context & assumptions</summary><dl><div><dt>Rahul</dt><dd>{rahulProfile.person.age} · {rahulProfile.person.occupation}</dd></div><div><dt>Household</dt><dd>{rahulProfile.person.household}</dd></div><div><dt>Monthly take-home</dt><dd>{formatRupees(rahulProfile.employment.monthlyTakeHome)}</dd></div><div><dt>Available surplus</dt><dd>{formatRupees(rahulProfile.monthlyPlan.investibleSurplus)}</dd></div><div><dt>Emergency buffer</dt><dd>{rahulProfile.monthlyPlan.emergencyFundMonths} months</dd></div><div><dt>Projection</dt><dd>{Math.round(projection.rate * 10000) / 100}% EPF · 6% annual contribution growth</dd></div></dl></details></article>;
 }
 
 function PermissionRow({ title, detail, checked, pending, disabled, onChange }: { title: string; detail: string; checked: boolean; pending: boolean; disabled: boolean; onChange: () => void }) {
   return <label className={`finance-permission${pending ? " is-pending" : ""}`} aria-busy={pending}><span><strong>{title}</strong><small>{detail}</small></span><input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} /><i aria-hidden="true">{pending && <span className="finance-button-spinner" />}</i></label>;
-}
-
-function CohortCard({ enabled }: { enabled: boolean }) {
-  const balance = totalEpfBalance();
-  const percentile = percentileForBalance(balance);
-  const monthlyCredit = rahulProfile.epf.employeeContribution + rahulProfile.epf.employerEpfContribution;
-  const contributionLead = Math.round((monthlyCredit / cohortBenchmark.medianMonthlyEpfCredit - 1) * 100);
-  return <article className={`finance-cohort${enabled ? "" : " is-disabled"}`}><header><div><p>MATCHED COHORT · SYNTHETIC MODEL</p><h2>Members most like Rahul</h2></div><span>{enabled ? `${cohortBenchmark.sampleSize.toLocaleString("en-IN")} profiles` : "Paused"}</span></header>{enabled ? <><div className="cohort-position"><strong>{formatCompactRupees(balance)}</strong><span>Your total PF · {percentile}th percentile</span></div><div className="cohort-scale" aria-label={`Your PF balance is in the ${percentile}th percentile`}><i style={{ width: `${percentile}%` }} /><b style={{ left: `${percentile}%` }} /></div><div className="cohort-labels">{cohortBenchmark.balancePercentiles.map((point) => <span key={point.percentile}><strong>{formatCompactRupees(point.value)}</strong>{point.percentile === 50 ? "Median" : `${point.percentile}th`}</span>)}</div><div className="cohort-stat-grid"><div><small>Monthly EPF credit</small><strong>{formatCompactRupees(monthlyCredit)}</strong><span>{contributionLead}% above median</span></div><div><small>Deposit continuity</small><strong>100%</strong><span>cohort median {cohortBenchmark.medianContributionContinuity}%</span></div><div><small>Linked service</small><strong>9.2 years</strong><span>cohort median {cohortBenchmark.medianServiceYears}</span></div></div><p><strong>Inference:</strong> Rahul&apos;s position is driven by uninterrupted deposits and a completed ₹5.00L transfer—not only current salary. {cohortBenchmark.methodology}. Illustrative, not EPFO-published data.</p></> : <div className="cohort-paused"><Icon name="shield" size={22} /><strong>Benchmark paused</strong><span>Enable anonymous cohort data to compare your position.</span></div>}</article>;
-}
-
-function ScenarioLab({ onOpen }: { onOpen: () => void }) {
-  const [withdrawal, setWithdrawal] = useState(75000);
-  const impact = useMemo(() => projectWithdrawalImpact(withdrawal), [withdrawal]);
-  return <article className="finance-scenario"><header><div><p>SCENARIO LAB</p><h2>Cost of withdrawing today</h2></div><span>At retirement</span></header><div className="scenario-numbers"><div><small>Withdraw now</small><strong>{formatRupees(withdrawal)}</strong></div><div><small>Lost future value</small><strong>−{formatRupees(impact.lostGrowth)}</strong></div></div><label htmlFor="withdrawal-scenario">Withdrawal amount</label><input id="withdrawal-scenario" type="range" min="25000" max="300000" step="25000" value={withdrawal} onChange={(event) => setWithdrawal(Number(event.target.value))} /><div className="scenario-range"><span>₹25k</span><span>₹3L</span></div><button type="button" onClick={onOpen}>Open full retirement model <Icon name="arrow" size={15} /></button></article>;
 }
 
 function trendWord(values: number[]): "up" | "down" | "flat" {
@@ -205,39 +143,6 @@ function SparklineProse({ years }: { years: YearContribution[] }) {
     Averaging {formatRupees(average)}/year across {years.length} years, trending <strong className={`trend-${word}`}>{word === "flat" ? "flat" : word === "up" ? "up ↗" : "down ↘"}</strong>
     <Sparkline values={totals} width={56} height={16} />
   </p>;
-}
-
-function ContributionInsight({ result }: { result: ContributionCheck }) {
-  const years = useMemo(() => contributionHistory(), []);
-  return <section className="agent-insight-result">
-    <div className={`agent-insight-status ${result.ok ? "ok" : "warn"}`}><Icon name={result.ok ? "shield" : "bell"} size={16} />{result.ok ? "No gaps found" : "Needs a look"}</div>
-    <p>{result.message}</p>
-    <SparklineProse years={years} />
-    <ChartCard title="Contribution history by financial year" expandLabel="contribution history" renderLarge={() => <SparklineTable years={years} />}>
-      <SparklineTable years={years} />
-    </ChartCard>
-  </section>;
-}
-
-function EligibilityInsight({ results }: { results: EligibilityResult[] }) {
-  return <>
-    <dl className="agent-insight-list">
-      {results.map((result) => <div key={result.purpose}>
-        <dt>{result.purpose}<i className={`agent-impact ${result.eligible ? "ok" : ""}`}>{result.eligible ? "Eligible now" : `From ${result.eligibleFrom}`}</i></dt>
-        <dd>Advance cap: {result.capNote}.</dd>
-      </div>)}
-    </dl>
-    <p className="agent-insight-footnote">{UNRATED_PURPOSES.join(", ")} advances don&apos;t have a published minimum-service rule in this preview — check with EPFO directly.</p>
-  </>;
-}
-
-function ReadinessInsight({ items }: { items: ReadinessItem[] }) {
-  return <dl className="agent-insight-list">
-    {items.map((item) => <div key={item.label}>
-      <dt>{item.label}<i className={`agent-impact ${item.ready ? "ok" : ""}`}>{item.ready ? "Ready" : "Action needed"}</i></dt>
-      <dd>{item.detail}</dd>
-    </div>)}
-  </dl>;
 }
 
 function formatRupees(amount: number): string {
@@ -295,38 +200,6 @@ function ChartModal({ title, onClose, children }: { title: string; onClose: () =
 type ChartSize = { width: number; height: number; padLeft: number; padRight: number; padTop: number; padBottom: number };
 const LINE_SMALL: ChartSize = { width: 300, height: 132, padLeft: 40, padRight: 44, padTop: 10, padBottom: 20 };
 const LINE_LARGE: ChartSize = { width: 640, height: 340, padLeft: 64, padRight: 108, padTop: 20, padBottom: 34 };
-
-function RetirementInsight() {
-  const projection = useMemo<RetirementProjection>(() => projectRetirementCorpus(), []);
-  const series = useMemo(() => projectRetirementSeries(), []);
-  return <section className="agent-insight-result">
-    <div className="agent-insight-status ok"><Icon name="shield" size={16} />{projection.retirementYear}</div>
-    <p>At today&apos;s declared EPF rate of {(projection.rate * 100).toFixed(2)}%, continuing your current ₹{projection.monthlyContribution.toLocaleString("en-IN")}/month contribution to age 58 in {projection.retirementYear} ({projection.yearsRemaining} years away) projects to <strong>{formatRupees(projection.projectedCorpus)}</strong>.</p>
-    <ChartCard title="Projected PF balance to retirement" expandLabel="retirement chart" renderLarge={() => <LineChart series={series} size={LINE_LARGE} />}>
-      <LineChart series={series} size={LINE_SMALL} />
-    </ChartCard>
-    <p className="agent-insight-footnote">EPFO resets this rate every year — this is not a guaranteed figure, only a projection at the currently declared rate.</p>
-  </section>;
-}
-
-function PensionInsight() {
-  const projection = useMemo(() => projectPension(), []);
-  const { current, ifTransferCompleted } = projection;
-  const bars = useMemo(() => [
-    { label: "At 50", value: pensionAtAge(50, current.monthlyPension) },
-    { label: "At 58", value: current.monthlyPension, highlight: true },
-    { label: "At 60", value: pensionAtAge(60, current.monthlyPension) },
-  ], [current.monthlyPension]);
-  return <section className="agent-insight-result">
-    <div className={`agent-insight-status ${current.meetsMinimumService ? "ok" : "warn"}`}><Icon name={current.meetsMinimumService ? "shield" : "bell"} size={16} />{current.meetsMinimumService ? "On track" : "Below 10-year minimum"}</div>
-    <p>Projected to age 58 with {current.pensionableServiceYears} years of pensionable service, EPFO&apos;s formula (pensionable salary × service ÷ 70, capped at ₹{current.pensionableSalary.toLocaleString("en-IN")}) estimates <strong>{formatRupees(current.monthlyPension)}/month</strong>.</p>
-    {ifTransferCompleted && ifTransferCompleted.monthlyPension !== current.monthlyPension && <p>Completing your pending PF transfer would add that service to your pension record — {formatRupees(ifTransferCompleted.monthlyPension)}/month instead.</p>}
-    <ChartCard title="Monthly pension by claiming age" expandLabel="pension chart" renderLarge={() => <SlopeChart points={bars} height={240} />}>
-      <SlopeChart points={bars} />
-    </ChartCard>
-    <p className="agent-insight-footnote">Assumes continuous contribution until retirement and no higher-wage EPS election on record.</p>
-  </section>;
-}
 
 function LineChart({ series, compareSeries, size = LINE_SMALL }: { series: CorpusPoint[]; compareSeries?: CorpusPoint[]; size?: ChartSize }) {
   const { width, height, padLeft, padRight, padTop, padBottom } = size;
@@ -609,7 +482,93 @@ function TimelineChart({ segments }: { segments: TimelineSegment[] }) {
 
 type DataSource = "retirement" | "withdrawal" | "pension" | "contributions" | "timeline" | "contribution_split" | "contributions_by_employer";
 type ChartForm = "line" | "bar" | "pie" | "donut" | "treemap";
-type AgentIntent = { intentType: "claim_eligibility" | "retirement_projection" | "withdrawal_impact" | "pension_estimate" | "contribution_check" | "chart_request" | "unclear"; purpose: string | null; amount: number | null; dataSource: DataSource | null; chartForm: ChartForm | null };
+type AgentIntent = { intentType: "claim_eligibility" | "retirement_projection" | "withdrawal_impact" | "pension_estimate" | "contribution_check" | "chart_request" | "portfolio_snapshot" | "scenario_simulation" | "cohort_comparison" | "unclear"; purpose: string | null; amount: number | null; dataSource: DataSource | null; chartForm: ChartForm | null; provider: "Zerodha" | "Upstox" | "Groww" | null; scenario: ScenarioId | null; months: number | null; dropPct: number | null; includeEpf: boolean; includePortfolio: boolean; includeCohort: boolean };
+
+const EPF_PRIMARY_INTENTS = new Set(["claim_eligibility", "retirement_projection", "withdrawal_impact", "pension_estimate", "contribution_check"]);
+
+function epfContextLine(epfoConnected: boolean): string {
+  if (!epfoConnected) return "Your EPFO passbook is paused, so EPF balance isn't available right now.";
+  return `Your EPF balance is ${formatRupees(totalEpfBalance())}.`;
+}
+
+function portfolioContextLine(connections: ProviderConnections): string | null {
+  const connectedNames = PROVIDER_NAMES.filter((name) => connections[name]);
+  if (connectedNames.length === 0) return "You haven't connected any brokerage accounts yet.";
+  const withValue = connectedNames.filter((name) => connections[name]?.value);
+  if (withValue.length === 0) return `You've connected ${connectedNames.join(", ")}, but haven't shared portfolio value with the agent yet.`;
+  const total = withValue.reduce((sum, name) => sum + providerAccounts.find((account) => account.name === name)!.value, 0);
+  return `Across ${withValue.join(", ")}, your connected investments are worth ${formatRupees(total)}.`;
+}
+
+function cohortContextLine(cohortEnabled: boolean): string {
+  if (!cohortEnabled) return "Cohort comparison is paused, so peer standing isn't available right now.";
+  const percentile = percentileForBalance(totalEpfBalance());
+  return `On EPF balance alone, you're ahead of ${percentile}% of a matched cohort.`;
+}
+
+function applyCrossDomainContext(answer: AskAnswer, intentType: AgentIntent["intentType"], flags: { includeEpf: boolean; includePortfolio: boolean; includeCohort: boolean }, connections: ProviderConnections, epfoConnected: boolean, cohortEnabled: boolean): AskAnswer {
+  const extra: string[] = [];
+  if (flags.includeEpf && !EPF_PRIMARY_INTENTS.has(intentType)) extra.push(epfContextLine(epfoConnected));
+  if (flags.includePortfolio && intentType !== "portfolio_snapshot") {
+    const line = portfolioContextLine(connections);
+    if (line) extra.push(line);
+  }
+  if (flags.includeCohort && intentType !== "cohort_comparison") extra.push(cohortContextLine(cohortEnabled));
+  if (extra.length === 0) return answer;
+  return { ...answer, text: `${answer.text} ${extra.join(" ")}` };
+}
+
+function answerPortfolioSnapshot(provider: "Zerodha" | "Upstox" | "Groww" | null, connections: ProviderConnections): AskAnswer {
+  if (provider) return answerMention(provider, connections);
+  const epfLine = `Your EPF balance is ${formatRupees(totalEpfBalance())}.`;
+  const connectedNames = PROVIDER_NAMES.filter((name) => connections[name]);
+  if (connectedNames.length === 0) return { text: `${epfLine} You haven't connected any brokerage accounts yet — use the broker panel next to the message box to link one and compare.` };
+  const withValue = connectedNames.filter((name) => connections[name]?.value);
+  if (withValue.length === 0) return { text: `${epfLine} You've connected ${connectedNames.join(", ")}, but haven't shared portfolio value with the agent yet. Open the broker panel to choose what it can see.` };
+  const total = withValue.reduce((sum, name) => sum + providerAccounts.find((account) => account.name === name)!.value, 0);
+  const parts = [epfLine, `Across ${withValue.join(", ")}, your connected investments are worth ${formatRupees(total)}.`];
+  const withHoldings = connectedNames.filter((name) => connections[name]?.holdings);
+  if (withHoldings.length > 0) {
+    const holdingsText = withHoldings.map((name) => {
+      const account = providerAccounts.find((item) => item.name === name)!;
+      return `${name} holds ${account.holdingsList.map((holding) => holding.instrument).join(", ")}`;
+    }).join("; ");
+    parts.push(holdingsText + ".");
+  }
+  const withTransactions = connectedNames.filter((name) => connections[name]?.transactions);
+  if (withTransactions.length > 0) {
+    const tradesText = withTransactions.map((name) => {
+      const account = providerAccounts.find((item) => item.name === name)!;
+      const trades = account.recentTrades.map((trade) => `${trade.date}: ${trade.action.toLowerCase()} ${trade.instrument} for ${formatRupees(trade.amount)}`).join("; ");
+      return `${name} — ${trades}`;
+    }).join(" | ");
+    parts.push(`Recent trades: ${tradesText}.`);
+  }
+  return { text: parts.join(" ") };
+}
+
+function scenarioAnswer(result: ScenarioResult): AskAnswer {
+  const statsText = result.stats.map((stat) => `${stat.label}: ${stat.value}`).join(" · ");
+  return { text: `${result.summary} ${statsText}. ${result.reassurance}`, chart: result.series ? { kind: "line", series: result.series, compareSeries: result.compareSeries ?? undefined } : undefined };
+}
+
+function answerCohortComparison(cohortEnabled: boolean): AskAnswer {
+  if (!cohortEnabled) return { text: "Cohort comparison is paused. Re-enable anonymous cohort data in Account access to see how you compare to similar EPFO members." };
+  const balance = totalEpfBalance();
+  const percentile = percentileForBalance(balance);
+  const monthlyCredit = rahulProfile.epf.employeeContribution + rahulProfile.epf.employerEpfContribution;
+  const contributionLead = Math.round((monthlyCredit / cohortBenchmark.medianMonthlyEpfCredit - 1) * 100);
+  return { text: `Your PF balance of ${formatRupees(balance)} is ahead of ${percentile}% of a matched cohort (${cohortBenchmark.methodology}, ${cohortBenchmark.sampleSize.toLocaleString("en-IN")} profiles). Your monthly EPF credit of ${formatRupees(monthlyCredit)} is ${contributionLead >= 0 ? `${contributionLead}% above` : `${Math.abs(contributionLead)}% below`} the cohort median. This benchmark compares EPF balance only — connected brokerage investments aren't included. Illustrative, not EPFO-published data.` };
+}
+
+function answerScenarioSimulation(scenario: ScenarioId | null, months: number | null, amount: number | null, dropPct: number | null, connections: ProviderConnections): AskAnswer {
+  if (!scenario) return { text: "Tell me which scenario to model — a job loss, a medical emergency, or a market drawdown on your connected investments." };
+  if (scenario === "job_loss") return scenarioAnswer(simulateJobLoss(months && months > 0 ? Math.round(months) : 6));
+  if (scenario === "medical_emergency") return scenarioAnswer(simulateMedicalEmergency(amount && amount > 0 ? amount : 600000));
+  const result = simulateMarketDrawdown(dropPct && dropPct > 0 ? dropPct : 0.3, connections);
+  if (result === "no_data") return { text: "You haven't connected any brokerage accounts with shared portfolio value yet — connect one via the broker panel next to the message box to model a market drawdown." };
+  return scenarioAnswer(result);
+}
 type AskChart =
   | { kind: "line"; series: CorpusPoint[]; compareSeries?: CorpusPoint[] }
   | { kind: "slope"; points: SlopePoint[] }
@@ -704,7 +663,9 @@ function ChartPicker({ onPick }: { onPick: (query: string) => void }) {
   </div>;
 }
 
-const SLASH_COMMANDS = [{ command: "/chart", label: "/chart", description: "Generate a specific chart" }];
+const SLASH_COMMANDS = [
+  { command: "/chart", label: "/chart", description: "Generate a specific chart" },
+];
 
 function SlashCommandMenu({ onPick }: { onPick: (command: string) => void }) {
   return <div className="agent-chart-picker" aria-label="Slash commands">
@@ -713,6 +674,108 @@ function SlashCommandMenu({ onPick }: { onPick: (command: string) => void }) {
       <strong>{command.label}</strong><small>{command.description}</small>
     </button>)}
   </div>;
+}
+
+const PROVIDER_NAMES = providerAccounts.map((provider) => provider.name);
+
+function ConnectorDock({ connections, pendingAction, onToggleProvider, onToggleScope, epfoConnected, onToggleEpfo, open, onToggleOpen, onClose }: { connections: ProviderConnections; pendingAction: string | null; onToggleProvider: (provider: string) => void; onToggleScope: (provider: string, scope: ProviderScopeId) => void; epfoConnected: boolean; onToggleEpfo: () => void; open: boolean; onToggleOpen: () => void; onClose: () => void }) {
+  const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
+  const connectedCount = PROVIDER_NAMES.filter((name) => connections[name]).length + (epfoConnected ? 1 : 0);
+  return <div className="connector-dock-wrap">
+    <button type="button" className={`connector-toggle${connectedCount ? " is-connected" : ""}`} aria-expanded={open} aria-label="Connected finance accounts" title="Connected finance accounts" onClick={onToggleOpen}>
+      <Icon name="building" size={16} />
+      {connectedCount > 0 && <span className="connector-toggle-badge">{connectedCount}</span>}
+    </button>
+    {open && <div className="connector-popover">
+      <div className="connector-popover-head">
+        <p className="connector-popover-title">Broker panel</p>
+        <button type="button" className="connector-popover-close" aria-label="Close" onClick={onClose}><Icon name="close" size={13} /></button>
+      </div>
+      <label className={`finance-scope connector-epfo-toggle${pendingAction === "permission:epfo" ? " is-pending" : ""}`}>
+        <span><strong>EPFO Passbook</strong><small>{epfoConnected ? "Connected · balance, claims, service history" : "Paused — chat answers are limited"}</small></span>
+        <input type="checkbox" checked={epfoConnected} disabled={pendingAction !== null} onChange={onToggleEpfo} />
+        <i aria-hidden="true">{pendingAction === "permission:epfo" && <span className="finance-button-spinner" />}</i>
+      </label>
+      {PROVIDER_NAMES.map((name) => {
+        const isExpanded = expandedProvider === name;
+        return <div key={name} className="connector-provider-row">
+          <button type="button" className="connector-provider-toggle" aria-expanded={isExpanded} onClick={() => setExpandedProvider((current) => (current === name ? null : name))}>
+            <span className={`connector-dot${connections[name] ? " is-connected" : ""}`} aria-hidden="true">{name[0]}</span>
+            <span className="connector-provider-name">{name}</span>
+            <Icon name="chevron" size={13} />
+          </button>
+          <div className={`connector-provider-detail${isExpanded ? " is-open" : ""}`}>
+            <div><ProviderConnector provider={name} scopes={connections[name]} pendingAction={pendingAction} onToggleProvider={onToggleProvider} onToggleScope={onToggleScope} /></div>
+          </div>
+        </div>;
+      })}
+    </div>}
+  </div>;
+}
+
+function ProviderConnector({ provider, scopes, pendingAction, onToggleProvider, onToggleScope }: { provider: string; scopes: ProviderScopes | undefined; pendingAction: string | null; onToggleProvider: (provider: string) => void; onToggleScope: (provider: string, scope: ProviderScopeId) => void }) {
+  const account = providerAccounts.find((item) => item.name === provider)!;
+  const isConnected = !!scopes;
+  const isProviderPending = pendingAction === `connect:${provider}` || pendingAction === `disconnect:${provider}`;
+  const grantedLabels = scopes ? PROVIDER_SCOPES.filter((scope) => scopes[scope.id]).map((scope) => scope.label.toLowerCase()) : [];
+  return <div className={`finance-provider${isConnected ? " is-connected" : ""}`}>
+    <div className="finance-provider-row">
+      <div><small>{isProviderPending ? (isConnected ? "Disconnecting…" : "Requesting authorization…") : isConnected ? account.account : "Stocks & mutual funds · read-only"}</small></div>
+      <button type="button" className={isConnected ? "is-connected" : ""} onClick={() => onToggleProvider(provider)} disabled={pendingAction !== null}>{isProviderPending ? <><span className="finance-button-spinner" aria-hidden="true" />{isConnected ? "Disconnecting…" : "Connecting…"}</> : isConnected ? "Disconnect" : "Connect"}</button>
+    </div>
+    {scopes && <div className="finance-provider-scopes">
+      <p className="finance-provider-seen">{grantedLabels.length ? `Agent can currently see: ${grantedLabels.join(", ")}` : "Agent can't see any data from this connector yet"}</p>
+      {PROVIDER_SCOPES.map((scope) => {
+        const isScopePending = pendingAction === `scope:${provider}:${scope.id}`;
+        return <label key={scope.id} className={`finance-scope${isScopePending ? " is-pending" : ""}`}>
+          <span><strong>{scope.label}</strong><small>{scope.detail}</small></span>
+          <input type="checkbox" checked={scopes[scope.id]} disabled={pendingAction !== null} onChange={() => onToggleScope(provider, scope.id)} />
+          <i aria-hidden="true">{isScopePending && <span className="finance-button-spinner" />}</i>
+        </label>;
+      })}
+      {scopes.holdings && <>
+        <small className="finance-provider-mix">{account.mix} · gain {formatCompactRupees(account.value - account.invested)}</small>
+        <ul className="finance-provider-holdings">{account.holdingsList.map((holding) => <li key={holding.instrument}><span>{holding.instrument}</span><b>{formatCompactRupees(holding.value)}</b></li>)}</ul>
+      </>}
+      {scopes.transactions && <ul className="finance-provider-trades">{account.recentTrades.map((trade) => <li key={`${trade.date}-${trade.instrument}`}><span>{trade.date}</span><span>{trade.action} {trade.instrument}</span><b>{formatCompactRupees(trade.amount)}</b></li>)}</ul>}
+    </div>}
+  </div>;
+}
+
+type MentionSource = "epfo" | "Zerodha" | "Upstox" | "Groww";
+
+const MENTIONABLE: { id: MentionSource; label: string; hint: string }[] = [
+  { id: "epfo", label: "@epfo", hint: "Your EPF balance and latest contribution" },
+  { id: "Zerodha", label: "@zerodha", hint: "What you've shared with the agent" },
+  { id: "Upstox", label: "@upstox", hint: "What you've shared with the agent" },
+  { id: "Groww", label: "@groww", hint: "What you've shared with the agent" },
+];
+
+function MentionMenu({ connections, onPick }: { connections: ProviderConnections; onPick: (source: MentionSource) => void }) {
+  return <div className="agent-chart-picker" aria-label="Ask about a connected source">
+    <p className="agent-chart-picker-title">Ask about a source</p>
+    {MENTIONABLE.map((item) => {
+      const isAvailable = item.id === "epfo" || !!connections[item.id];
+      return <button key={item.id} type="button" disabled={!isAvailable} onMouseDown={(event) => event.preventDefault()} onClick={() => isAvailable && onPick(item.id)}>
+        <strong>{item.label}</strong><small>{isAvailable ? item.hint : "Not connected — open the broker panel to connect"}</small>
+      </button>;
+    })}
+  </div>;
+}
+
+function answerMention(source: MentionSource, connections: ProviderConnections): AskAnswer {
+  if (source === "epfo") return { text: checkContributionHealth().message };
+  const scopes = connections[source];
+  if (!scopes) return { text: `${source} isn't connected yet. Open the broker panel next to the message box to connect it.` };
+  const account = providerAccounts.find((provider) => provider.name === source)!;
+  const parts: string[] = [];
+  if (scopes.value) parts.push(`total value ${formatRupees(account.value)}`);
+  if (scopes.holdings) parts.push(`holds ${account.holdingsList.map((holding) => holding.instrument).join(", ")} (${account.mix})`);
+  if (parts.length === 0) return { text: `${source} is connected, but you haven't shared any data with the agent yet. Open the broker panel next to the message box to choose what it can see.` };
+  const text = `${source}: ${parts.join(" · ")}.`;
+  if (!scopes.transactions) return { text };
+  const tradesText = account.recentTrades.map((trade) => `${trade.date}: ${trade.action.toLowerCase()} ${trade.instrument} for ${formatRupees(trade.amount)}`).join("; ");
+  return { text: `${text} Recent trades — ${tradesText}.` };
 }
 
 function AskChartView({ chart }: { chart: AskChart }) {
@@ -773,62 +836,105 @@ const PRESET_QUESTIONS = [
   "Will completing my Civic Data Labs transfer change my pension?",
   "Did Infosys pay this month's contribution on time?",
   "Am I eligible for a housing advance yet?",
+  "What if I lost my job for 6 months?",
+  "How do I compare to similar EPFO members?",
 ];
 
-function AskInWords({ eligibility }: { eligibility: EligibilityResult[] }) {
+const PROVIDER_PRESET_QUESTIONS: Record<string, string> = {
+  Zerodha: "What's my Zerodha portfolio worth?",
+  Upstox: "What mutual funds do I hold on Upstox?",
+  Groww: "What was my last trade on Groww?",
+};
+
+function AskInWords({ eligibility, connections, actions, turns, setTurns, pendingAction, epfoConnected, onToggleEpfo, cohortEnabled, onToggleProvider, onToggleScope, onOpenAction }: { eligibility: EligibilityResult[]; connections: ProviderConnections; actions: AgentAction[]; turns: ChatTurn[]; setTurns: React.Dispatch<React.SetStateAction<ChatTurn[]>>; pendingAction: string | null; epfoConnected: boolean; onToggleEpfo: () => void; cohortEnabled: boolean; onToggleProvider: (provider: string) => void; onToggleScope: (provider: string, scope: ProviderScopeId) => void; onOpenAction: (action: AgentAction) => void }) {
   const [text, setText] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
-  const [answer, setAnswer] = useState<AskAnswer | null>(null);
   const [focused, setFocused] = useState(false);
+  const [connectorOpen, setConnectorOpen] = useState(false);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" });
+  }, [turns]);
 
   const trimmedLower = text.trim().toLowerCase();
   const isSlash = trimmedLower.startsWith("/");
   const isChartMode = trimmedLower.startsWith("/chart");
+  const isMention = trimmedLower.startsWith("@");
   const chartQuery = isChartMode ? text.trim().slice("/chart".length).trim() : "";
+  const mentionMatch = isMention ? MENTIONABLE.find((item) => trimmedLower === item.label || trimmedLower.startsWith(`${item.label} `)) : undefined;
 
-  const runQuery = useCallback(async (query: string) => {
-    if (!query.trim()) return;
+  const pushInstant = useCallback((question: string, answer: AskAnswer) => {
+    setTurns((current) => [...current, { id: crypto.randomUUID(), question, status: "done", answer }]);
+  }, [setTurns]);
+
+  const askAndPush = useCallback(async (question: string, compute: () => Promise<AskAnswer>) => {
+    const id = crypto.randomUUID();
     setStatus("loading");
-    setAnswer(null);
+    setTurns((current) => [...current, { id, question, status: "loading", answer: null }]);
     try {
+      const answer = await compute();
+      setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, status: "done", answer } : turn)));
+      setStatus("idle");
+    } catch {
+      setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, status: "error", answer: null } : turn)));
+      setStatus("error");
+    }
+  }, [setTurns]);
+
+  const runQuery = useCallback((query: string) => {
+    if (!query.trim()) return;
+    askAndPush(query, async () => {
       const response = await fetch("/api/agent-intent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: query }) });
       const body = await response.json();
       if (!response.ok || !body.intent) throw new Error(body.error ?? "failed");
-      const { intentType, purpose, amount, dataSource, chartForm } = body.intent as AgentIntent;
-      const result: AskAnswer =
-        intentType === "claim_eligibility" ? answerClaimEligibility(eligibility, purpose, amount)
+      const { intentType, purpose, amount, dataSource, chartForm, provider, scenario, months, dropPct, includeEpf, includePortfolio, includeCohort } = body.intent as AgentIntent;
+      const primary = intentType === "claim_eligibility" ? answerClaimEligibility(eligibility, purpose, amount)
         : intentType === "withdrawal_impact" ? answerWithdrawalImpact(amount)
         : intentType === "retirement_projection" ? answerRetirementProjection()
         : intentType === "pension_estimate" ? answerPensionEstimate()
         : intentType === "contribution_check" ? { text: checkContributionHealth().message }
         : intentType === "chart_request" ? answerChartRequest(dataSource, chartForm, amount)
-        : { text: "I couldn't tell what you're asking — try asking about a claim purpose, a chart, your retirement projection, your pension estimate, or a contribution." };
-      setAnswer(result);
-      setStatus("idle");
-    } catch {
-      setStatus("error");
-    }
-  }, [eligibility]);
+        : intentType === "portfolio_snapshot" ? answerPortfolioSnapshot(provider, connections)
+        : intentType === "scenario_simulation" ? answerScenarioSimulation(scenario, months, amount, dropPct, connections)
+        : intentType === "cohort_comparison" ? answerCohortComparison(cohortEnabled)
+        : { text: "I couldn't tell what you're asking — try asking about a claim purpose, a chart, your retirement projection, your pension estimate, a contribution, a life-event scenario, how you compare to your cohort, or a connected investment." };
+      return applyCrossDomainContext(primary, intentType, { includeEpf, includePortfolio, includeCohort }, connections, epfoConnected, cohortEnabled);
+    });
+  }, [eligibility, connections, cohortEnabled, epfoConnected, askAndPush]);
+
+  const pickMention = useCallback((source: MentionSource) => {
+    const label = MENTIONABLE.find((item) => item.id === source)?.label ?? `@${source}`;
+    setText("");
+    setFocused(false);
+    pushInstant(label, answerMention(source, connections));
+  }, [connections, pushInstant]);
 
   const ask = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isChartMode) {
-      if (chartQuery) runQuery(`Generate a chart: ${chartQuery}`);
+      if (chartQuery) { runQuery(`Generate a chart: ${chartQuery}`); setText(""); }
+      return;
+    }
+    if (isMention) {
+      if (mentionMatch) pickMention(mentionMatch.id);
       return;
     }
     if (isSlash) return;
     // An unedited pick from the /chart list answers instantly from real computed data; edit even one word and it falls through to the AI classifier instead.
     const matchedOption = CHART_OPTIONS.find((option) => option.query === text.trim());
     if (matchedOption) {
-      setAnswer(matchedOption.build());
-      setStatus("idle");
+      pushInstant(text.trim(), matchedOption.build());
+      setText("");
       return;
     }
-    runQuery(text);
+    const question = text;
+    setText("");
+    runQuery(question);
   };
 
   const pickPreset = (question: string) => {
-    setText(question);
     setFocused(false);
     runQuery(question);
   };
@@ -837,26 +943,46 @@ function AskInWords({ eligibility }: { eligibility: EligibilityResult[] }) {
     setText(query);
   };
 
-  const showSuggestions = focused && status !== "loading" && (text.trim().length === 0 || isSlash);
+  const presetQuestions = useMemo(() => [...PRESET_QUESTIONS, ...PROVIDER_NAMES.filter((name) => connections[name]).map((name) => PROVIDER_PRESET_QUESTIONS[name])], [connections]);
+
+  const canSubmit = isChartMode ? !!chartQuery
+    : isMention ? !!mentionMatch
+    : isSlash ? false
+    : text.trim().length > 0;
+
+  const showSuggestions = focused && status !== "loading" && (isSlash || isMention);
 
   return <section className="agent-ask">
-    {answer && <div className="agent-ask-answer"><Icon name="spark" size={15} /><div><p>{answer.text}</p>{answer.chart && <AskChartView chart={answer.chart} />}</div></div>}
+    <div className="agent-chat-thread" ref={threadRef}>
+      {!epfoConnected && <div className="agent-chat-notice"><Icon name="shield" size={14} />EPFO passbook is paused — reconnect it below to resume account questions.</div>}
+      {turns.length === 0 ? <div className="agent-chat-empty">
+        <Icon name="spark" size={22} /><p>Ask about your PF balance, a claim, a projection, or a connected investment.</p>
+        {actions.length > 0 && <div className="agent-chat-empty-actions">{actions.map((action) => <button key={action.id} type="button" className="agent-suggestions-action" onClick={() => onOpenAction(action)}><Icon name={action.icon} size={13} />{action.title}</button>)}</div>}
+        <div className="agent-chat-empty-chips">{presetQuestions.map((question) => <button key={question} type="button" onClick={() => pickPreset(question)}>{question}</button>)}</div>
+      </div> : turns.map((turn) => <div key={turn.id} className="agent-chat-turn">
+        <div className="agent-chat-question">{turn.question}</div>
+        {turn.status === "loading" ? <div className="agent-ask-answer is-loading"><span className="agent-ask-spinner" aria-hidden="true" /><div><p>Thinking…</p></div></div>
+        : turn.status === "error" ? <div className="agent-ask-answer is-error"><Icon name="bell" size={15} /><div><p>Couldn&apos;t reach the intent service. Confirm OPENAI_API_KEY is set and try again.</p></div></div>
+        : turn.answer && <div className="agent-ask-answer"><Icon name="spark" size={15} /><div><p>{turn.answer.text}</p>{turn.answer.chart && <AskChartView chart={turn.answer.chart} />}</div></div>}
+      </div>)}
+    </div>
     <form onSubmit={ask}>
-      <label htmlFor="agent-ask-input"><Icon name="spark" size={14} />Message your finance agent</label>
+      <div className="agent-ask-toolbar">
+        <label htmlFor="agent-ask-input"><Icon name="spark" size={14} />Message your finance agent</label>
+      </div>
       <div className={`agent-ask-field${status === "loading" ? " is-loading" : ""}`}>
-        <input id="agent-ask-input" type="text" value={text} onChange={(event) => setText(event.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder="Ask anything, or say 'show me a chart of...'" disabled={status === "loading"} autoComplete="off" />
-        <button type="submit" className="agent-ask-send" aria-label="Ask" disabled={status === "loading" || !text.trim() || (isSlash && !chartQuery)}>{status === "loading" ? <span className="agent-ask-spinner" aria-hidden="true" /> : <Icon name="arrow" size={15} />}</button>
+        <input ref={inputRef} id="agent-ask-input" type="text" value={text} onChange={(event) => setText(event.target.value)} onFocus={() => { setFocused(true); setConnectorOpen(false); }} onBlur={() => setFocused(false)} placeholder="Ask anything, or type / or @ for commands" disabled={status === "loading"} autoComplete="off" />
+        <button type="submit" className="agent-ask-send" aria-label="Ask" disabled={status === "loading" || !canSubmit}>{status === "loading" ? <span className="agent-ask-spinner" aria-hidden="true" /> : <Icon name="arrow" size={15} />}</button>
+      </div>
+      <div className="agent-ask-footer">
+        <ConnectorDock connections={connections} pendingAction={pendingAction} onToggleProvider={onToggleProvider} onToggleScope={onToggleScope} epfoConnected={epfoConnected} onToggleEpfo={onToggleEpfo} open={connectorOpen} onToggleOpen={() => { setConnectorOpen((value) => !value); setFocused(false); }} onClose={() => setConnectorOpen(false)} />
       </div>
       {showSuggestions && (isChartMode ? <>
         {chartQuery && <p className="agent-chart-picker-hint">Press Enter for a custom chart of &ldquo;{chartQuery}&rdquo;, or pick one below:</p>}
         <ChartPicker onPick={pickChart} />
-      </> : isSlash ? <SlashCommandMenu onPick={(command) => setText(`${command} `)} /> : <div className="agent-suggestions" aria-label="Example questions">
-        <p className="agent-suggestions-title">Try asking</p>
-        {PRESET_QUESTIONS.map((question) => <button key={question} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => pickPreset(question)}>{question}</button>)}
-        <button type="button" className="agent-suggestions-chart" onMouseDown={(event) => event.preventDefault()} onClick={() => setText("/")}><Icon name="spark" size={12} />Type / to see commands</button>
-      </div>)}
-      {status === "error" && <small className="agent-ask-error">Couldn&apos;t reach the intent service. Confirm OPENAI_API_KEY is set and try again.</small>}
-      <small>Answers from permitted sources. Type / for commands.</small>
+      </> : isMention ? <MentionMenu connections={connections} onPick={pickMention} />
+      : <SlashCommandMenu onPick={(command) => setText(`${command} `)} />)}
+      <small>Answers from permitted sources. Type / for commands, @ to ask about a connected source.</small>
     </form>
   </section>;
 }

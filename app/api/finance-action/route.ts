@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const FinanceAction = z.object({
-  action: z.enum(["permission", "connect", "disconnect"]),
+  action: z.enum(["permission", "connect", "disconnect", "scope"]),
   target: z.string().trim().min(1).max(40),
 });
 

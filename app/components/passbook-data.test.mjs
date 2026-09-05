@@ -18,4 +18,7 @@ test("Rahul's financial mock data reconciles across the workspace", () => {
   assert.equal(entries.find((entry) => entry.reference === educationClaim?.id)?.amount, 60000);
   assert.equal(entries.filter((entry) => entry.reference === completedTransfer?.id).length, 2);
   assert.equal(providerAccounts.every((provider) => provider.value >= provider.invested && provider.holdings > 0), true);
+  assert.equal(providerAccounts.every((provider) => provider.holdingsList.length === provider.holdings), true);
+  assert.equal(providerAccounts.every((provider) => provider.holdingsList.reduce((sum, holding) => sum + holding.value, 0) === provider.value), true);
+  assert.equal(providerAccounts.every((provider) => provider.recentTrades.every((trade) => provider.holdingsList.some((holding) => holding.instrument === trade.instrument))), true);
 });

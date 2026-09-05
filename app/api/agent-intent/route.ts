@@ -3,11 +3,18 @@ import { z } from "zod";
 import { purposes } from "../../claims/new/claim";
 
 const AgentIntent = z.object({
-  intentType: z.enum(["claim_eligibility", "retirement_projection", "withdrawal_impact", "pension_estimate", "contribution_check", "chart_request", "unclear"]),
+  intentType: z.enum(["claim_eligibility", "retirement_projection", "withdrawal_impact", "pension_estimate", "contribution_check", "chart_request", "portfolio_snapshot", "scenario_simulation", "cohort_comparison", "unclear"]),
   purpose: z.enum(purposes).nullable(),
   amount: z.number().nullable(),
   dataSource: z.enum(["retirement", "withdrawal", "pension", "contributions", "timeline", "contribution_split", "contributions_by_employer"]).nullable(),
   chartForm: z.enum(["line", "bar", "pie", "donut", "treemap"]).nullable(),
+  provider: z.enum(["Zerodha", "Upstox", "Groww"]).nullable(),
+  scenario: z.enum(["job_loss", "medical_emergency", "market_drawdown"]).nullable(),
+  months: z.number().nullable(),
+  dropPct: z.number().nullable(),
+  includeEpf: z.boolean(),
+  includePortfolio: z.boolean(),
+  includeCohort: z.boolean(),
 });
 
 function buildExtractor() {
@@ -33,9 +40,18 @@ function buildExtractor() {
       "- retirement_projection: asking what their PF balance will be at retirement, or how their savings will grow over time (compounding, future balance).",
       "- pension_estimate: asking about their EPS monthly pension amount, or pension at a given age.",
       "- contribution_check: asking whether their employer's contributions are up to date, or about a missing/late deposit.",
-      "- unclear: the message is not about their EPF/PF/pension account at all.",
+      "- portfolio_snapshot: asking about their connected brokerage or investment accounts — portfolio value, holdings, mutual funds, gain/loss, or recent trades on Zerodha, Upstox or Groww. Set provider to one of the three ONLY when they ask about that ONE broker specifically, in isolation. Leave provider null whenever they ask about their investments generally, ask across multiple brokers, or explicitly compare/combine a broker with their EPF/PF balance (e.g. \"between my EPF and my Zerodha, where's most of my money\") — in these cases a broker name appears in the message but the question is not about that one broker alone, so provider must stay null so the agent can summarize across everything connected.",
+      "- scenario_simulation: asking 'what if' about a life event — losing their job or income for a period, a medical emergency/large medical cost, or a market drop/crash affecting their investments. Set scenario to job_loss, medical_emergency, or market_drawdown accordingly. For job_loss, extract the number of months mentioned into months (e.g. \"6 months\", \"half a year\" -> 6); if none is stated, leave months null. For medical_emergency, extract any cost mentioned into amount; if none is stated, leave amount null. For market_drawdown, extract the percentage drop mentioned into dropPct as a fraction (e.g. \"30% crash\" -> 0.3, \"drops in half\" -> 0.5); if none is stated, leave dropPct null.",
+      "- cohort_comparison: asking how they compare to other/similar EPFO members, their percentile, ranking, or standing relative to peers of a similar age/role/tenure. This cohort benchmark is EPF-balance-only in this preview, so use this intent even if the member also mentions net worth or brokerage accounts alongside the comparison — the answer will make clear it only covers EPF.",
+      "- unclear: the message is not about their EPF/PF/pension account, or their connected investments, at all.",
       `If a purpose is mentioned, map it to exactly one of these values, never anything else: ${purposes.join(", ")}. If no purpose is stated or it doesn't match one of these, return null.`,
       "If a rupee amount is mentioned, extract it as a plain number (e.g. \"2 lakh\" -> 200000, \"60k\" -> 60000). If no amount is stated, return null. Never guess or default an amount.",
+      "The provider field only ever matters for portfolio_snapshot. For every other intentType, always leave provider null, even if a broker name happens to appear in the message — do not let a mentioned broker name change dataSource, purpose, or any other field either.",
+      "Member questions are often complicated and touch more than one topic in a single message — e.g. a life-event scenario that also asks about brokerage impact, or a withdrawal question that also asks how it compares to peers. intentType still names the ONE primary thing being asked (pick the strongest match using the rules above), but you must independently and separately flag every topic the message actually touches, regardless of intentType, using three booleans:",
+      "- includeEpf: true if the message touches their EPF/PF balance, contributions, claims, or pension in any way (including as one of several things compared/combined) — this is very often true since the whole conversation is about their EPF account.",
+      "- includePortfolio: true if the message mentions their brokerage/investment accounts (Zerodha, Upstox, Groww) or investments/stocks/mutual funds generally, even just in passing alongside another topic.",
+      "- includeCohort: true if the message asks, anywhere in it, how they compare to other members/peers/cohort — even if that is only part of a longer combined question.",
+      "Set a flag to true whenever that topic is genuinely part of what they're asking, even if it is not the primary intentType — for example \"what if I lost my job, how would that hit my Zerodha holdings and where would I stand vs my peers\" should have intentType scenario_simulation, includeEpf true, includePortfolio true, and includeCohort true, all at once. Only set a flag true when the topic is actually present in the message — do not default everything to true.",
     ].join("\n"),
     outputType: AgentIntent,
     ...(process.env.OPENAI_MODEL ? { model: process.env.OPENAI_MODEL } : {}),
@@ -60,7 +76,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await run(buildExtractor(), message.slice(0, 500));
-    return Response.json({ intent: result.finalOutput ?? { intentType: "unclear", purpose: null, amount: null, dataSource: null, chartForm: null } });
+    return Response.json({ intent: result.finalOutput ?? { intentType: "unclear", purpose: null, amount: null, dataSource: null, chartForm: null, provider: null, scenario: null, months: null, dropPct: null, includeEpf: false, includePortfolio: false, includeCohort: false } });
   } catch {
     return Response.json({ error: "Could not process this request right now." }, { status: 502 });
   }

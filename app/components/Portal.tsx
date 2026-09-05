@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { findEligibleTransfer } from "./agent-data";
 import { useLanguage } from "../language";
 import { EmploymentHistory } from "./EmploymentHistory";
 import { ClaimsWorkspace } from "./ClaimsWorkspace";
@@ -15,9 +16,10 @@ import { EpfAgent } from "./EpfAgent";
 export function Portal({ initialNav = "Home", initialClaimsTab = "status", initialClaimId, initialMemberId, initialProfileSection, onLogout }: { initialNav?: string; initialClaimsTab?: "start" | "status"; initialClaimId?: string; initialMemberId?: string; initialProfileSection?: string; onLogout?: () => void }) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [agentOpen, setAgentOpen] = useState(false);
   const activeNav = initialNav;
   const isHome = activeNav === "Home";
+  const isFinance = activeNav === "Finance";
+  const transferLead = useMemo(() => findEligibleTransfer(), []);
 
   const navigate = (item: string, tab?: "start" | "status", claimId?: string, memberId?: string, section?: string) => {
     if (item === "Home") return router.push("/");
@@ -31,13 +33,15 @@ export function Portal({ initialNav = "Home", initialClaimsTab = "status", initi
     router.push(`/?${query}`);
   };
 
+  const agentAlert = transferLead ? { title: `Prepare a PF transfer — ${transferLead.employer}`, detail: "Eligible to merge into your current Member ID.", onOpen: () => navigate("Finance") } : undefined;
+
   return (
     <main className="app-shell">
-      <PortalTopbar mobileOpen={mobileOpen} onToggleMobile={() => setMobileOpen(!mobileOpen)} onOpenAccount={() => navigate("Account")} onOpenAgent={() => setAgentOpen(true)} onLogout={onLogout} />
+      <PortalTopbar mobileOpen={mobileOpen} onToggleMobile={() => setMobileOpen(!mobileOpen)} onOpenAccount={() => navigate("Account")} agentAlert={agentAlert} onLogout={onLogout} />
       <PortalSidebar type="member" activeNav={activeNav} mobileOpen={mobileOpen} onNavigate={navigate} onClose={() => setMobileOpen(false)} />
 
-      <section key={agentOpen ? "finance-workspace" : activeNav} className={`content page-enter${agentOpen ? " finance-workspace-content" : ""}`}>
-        {agentOpen ? <EpfAgent onClose={() => setAgentOpen(false)} onNavigate={navigate} /> : <>
+      <section key={activeNav} className={`content page-enter${isFinance ? " finance-workspace-content" : ""}`}>
+        {isFinance ? <EpfAgent onClose={() => navigate("Home")} onNavigate={navigate} /> : <>
         <PageHeader activeNav={activeNav} />
         {activeNav === "Passbook" ? (
           <Passbook initialMemberId={initialMemberId} />

@@ -124,6 +124,27 @@ function compound(startBalance: number, monthlyContribution: number, monthsRemai
   return compoundSeries(startBalance, monthlyContribution, monthsRemaining, 0).final;
 }
 
+// Same year-by-year compounding as compoundSeries, but the first `pauseMonths` of contribution are dropped from whichever years they fall in — with pauseMonths=0 this reproduces compoundSeries exactly, so a scenario's baseline never drifts from the real projection.
+function compoundSeriesWithPause(startBalance: number, monthlyContribution: number, monthsRemaining: number, startYear: number, pauseMonths: number): { points: CorpusPoint[]; final: number } {
+  let balance = startBalance;
+  let monthly = monthlyContribution;
+  let remainingPause = Math.max(0, Math.min(pauseMonths, monthsRemaining));
+  const points: CorpusPoint[] = [{ year: startYear, balance: Math.round(balance) }];
+  const fullYears = Math.floor(monthsRemaining / 12);
+  const remainderMonths = monthsRemaining % 12;
+  for (let year = 0; year < fullYears; year += 1) {
+    const pausedThisYear = Math.min(remainingPause, 12);
+    remainingPause -= pausedThisYear;
+    balance = (balance + monthly * (12 - pausedThisYear)) * (1 + EPF_RATE);
+    points.push({ year: startYear + year + 1, balance: Math.round(balance) });
+    monthly *= 1 + ANNUAL_CONTRIBUTION_GROWTH;
+  }
+  const pausedRemainder = Math.min(remainingPause, remainderMonths);
+  balance += monthly * (remainderMonths - pausedRemainder);
+  if (remainderMonths > 0) points.push({ year: startYear + fullYears + 1, balance: Math.round(balance) });
+  return { points, final: balance };
+}
+
 export function projectRetirementCorpus(oneTimeWithdrawal = 0): RetirementProjection {
   const retireDate = retirementDate();
   const monthsRemaining = Math.max(0, monthsBetween(TODAY, retireDate));
@@ -138,6 +159,22 @@ export function projectRetirementSeries(oneTimeWithdrawal = 0): CorpusPoint[] {
   const monthlyContribution = rahulProfile.epf.employeeContribution + rahulProfile.epf.employerEpfContribution;
   const startBalance = Math.max(0, currentBalance() - oneTimeWithdrawal);
   return compoundSeries(startBalance, monthlyContribution, monthsRemaining, TODAY.getFullYear()).points;
+}
+
+export function projectRetirementCorpusWithPause(pauseMonths: number): RetirementProjection {
+  const retireDate = retirementDate();
+  const monthsRemaining = Math.max(0, monthsBetween(TODAY, retireDate));
+  const monthlyContribution = rahulProfile.epf.employeeContribution + rahulProfile.epf.employerEpfContribution;
+  const startBalance = currentBalance();
+  return { retirementYear: retireDate.getFullYear(), yearsRemaining: Math.round((monthsRemaining / 12) * 10) / 10, projectedCorpus: Math.round(compoundSeriesWithPause(startBalance, monthlyContribution, monthsRemaining, 0, pauseMonths).final), monthlyContribution, rate: EPF_RATE };
+}
+
+export function projectRetirementSeriesWithPause(pauseMonths: number): CorpusPoint[] {
+  const retireDate = retirementDate();
+  const monthsRemaining = Math.max(0, monthsBetween(TODAY, retireDate));
+  const monthlyContribution = rahulProfile.epf.employeeContribution + rahulProfile.epf.employerEpfContribution;
+  const startBalance = currentBalance();
+  return compoundSeriesWithPause(startBalance, monthlyContribution, monthsRemaining, TODAY.getFullYear(), pauseMonths).points;
 }
 
 export type WithdrawalImpact = { withdrawalAmount: number; corpusWithoutWithdrawal: number; corpusWithWithdrawal: number; lostGrowth: number };

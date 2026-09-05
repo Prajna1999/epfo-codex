@@ -1,6 +1,6 @@
 import { AppGate } from "./components/AppGate";
 
-const memberViews = ["Home", "Claims", "Passbook", "ServiceHistory", "Account"];
+const memberViews = ["Home", "Claims", "Passbook", "ServiceHistory", "Account", "Finance"];
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ view?: string | string[]; tab?: string | string[]; claim?: string | string[]; member?: string | string[]; section?: string | string[] }> }) {
   const { view, tab, claim, member, section } = await searchParams;

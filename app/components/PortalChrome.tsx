@@ -15,6 +15,7 @@ const navigation: Record<PortalType, NavigationItem[]> = {
     { label: "Claims", icon: "claim" },
     { label: "Passbook", icon: "book" },
     { label: "Service history", value: "ServiceHistory", icon: "briefcase" },
+    { label: "Finance", icon: "spark" },
   ],
   employer: [
     { label: "Overview", icon: "home" },
@@ -35,7 +36,7 @@ const navigation: Record<PortalType, NavigationItem[]> = {
   ],
 };
 
-export function PortalTopbar({ mobileOpen, onToggleMobile, onOpenAccount, onOpenAgent, agentLabel = "EPF guide", onLogout, profile = { initials: "RP", name: "Rahul Patil", status: "Verified account", accountId: "UAN 1009 2000 0123", accountStatus: "KYC verified" } }: { mobileOpen: boolean; onToggleMobile: () => void; onOpenAccount?: () => void; onOpenAgent?: () => void; agentLabel?: string; onLogout?: () => void; profile?: { initials: string; name: string; status: string; accountId?: string; accountStatus?: string } }) {
+export function PortalTopbar({ mobileOpen, onToggleMobile, onOpenAccount, onOpenAgent, agentLabel = "EPF guide", agentAlert, onLogout, profile = { initials: "RP", name: "Rahul Patil", status: "Verified account", accountId: "UAN 1009 2000 0123", accountStatus: "KYC verified" } }: { mobileOpen: boolean; onToggleMobile: () => void; onOpenAccount?: () => void; onOpenAgent?: () => void; agentLabel?: string; agentAlert?: { title: string; detail: string; onOpen: () => void }; onLogout?: () => void; profile?: { initials: string; name: string; status: string; accountId?: string; accountStatus?: string } }) {
   const { t } = useLanguage();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   return (
@@ -51,10 +52,17 @@ export function PortalTopbar({ mobileOpen, onToggleMobile, onOpenAccount, onOpen
         {onOpenAgent && <button className="agent-launch" type="button" onClick={onOpenAgent}><Icon name="spark" size={17} /><span>{agentLabel}</span></button>}
         <div className="notification-wrap">
           <button className="icon-button" aria-label={t("Notifications")} aria-expanded={notificationsOpen} aria-controls="contribution-notification" onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" /><span className="notification-dot" /></button>
-          {notificationsOpen && <section id="contribution-notification" className="contribution-notification" aria-label={t("LATEST CONTRIBUTION")}>
-            <span className="contribution-icon"><Icon name="building" size={20} /></span>
-            <div><small>{t("LATEST CONTRIBUTION")}</small><strong>{t("August contribution received")}</strong><span>Infosys Limited · {t("Deposited 18 August")}</span></div>
-            <b>+ ₹8,430</b>
+          {notificationsOpen && <section id="contribution-notification" className="notification-panel" aria-label={t("Notifications")}>
+            {agentAlert && <button type="button" className="notification-row is-alert" onClick={() => { agentAlert.onOpen(); setNotificationsOpen(false); }}>
+              <span className="contribution-icon alert"><Icon name="briefcase" size={20} /></span>
+              <div><small>{t("ACCOUNT MOVE")}</small><strong>{agentAlert.title}</strong><span>{agentAlert.detail}</span></div>
+              <Icon name="arrow" size={15} />
+            </button>}
+            <div className="notification-row">
+              <span className="contribution-icon"><Icon name="building" size={20} /></span>
+              <div><small>{t("LATEST CONTRIBUTION")}</small><strong>{t("August contribution received")}</strong><span>Infosys Limited · {t("Deposited 18 August")}</span></div>
+              <b>+ ₹8,430</b>
+            </div>
           </section>}
         </div>
         <LanguageSwitch />

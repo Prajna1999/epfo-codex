@@ -43,7 +43,7 @@ function BalanceCard() {
             {t("Total PF balance")} <span className="info" title={t("This is your recorded PF balance, not an immediately claimable amount.")}>i</span>
           </p>
           <h2>₹{totalEpfBalance().toLocaleString("en-IN")}<span>.00</span></h2>
-          <p className="balance-caption">{t("Recorded balance · Updated 18 Aug 2026")}</p>
+          <p className="balance-caption">{t("Recorded balance · Updated 28 Aug 2026")}</p>
           <div className="balance-breakdown">
             <div><span>{t("Current Member ID")}</span><strong>₹{memberBalance(current).toLocaleString("en-IN")}</strong></div>
             <div><span>{t("Transfer available")}</span><strong>₹{memberBalance(transferable).toLocaleString("en-IN")}</strong></div>
