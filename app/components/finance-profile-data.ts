@@ -49,6 +49,9 @@ export const cohortBenchmark = {
   medianMonthlyEpfCredit: 11400,
   medianContributionContinuity: 91,
   medianServiceYears: 7.4,
+  medianEmergencyFundMonths: 4.2,
+  medianInvestibleSurplus: 36000,
+  previousAccountTransferCompletion: 64,
 } as const;
 
 export function percentileForBalance(balance: number) {

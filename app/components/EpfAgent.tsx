@@ -5,19 +5,30 @@ import { createPortal } from "react-dom";
 import { buildGenericSeries, checkAdvanceEligibility, checkContributionHealth, contributionHistory, findEligibleTransfer, pensionAtAge, projectPension, projectRetirementCorpus, projectRetirementSeries, projectWithdrawalImpact, serviceTimeline, UNRATED_PURPOSES, type CorpusPoint, type DataPoint, type EligibilityResult, type TimelineSegment, type YearContribution } from "./agent-data";
 import { cohortBenchmark, DEFAULT_PROVIDER_SCOPES, percentileForBalance, PROVIDER_SCOPES, providerAccounts, rahulProfile, type ProviderConnections, type ProviderScopeId, type ProviderScopes } from "./finance-profile-data";
 import { Icon, type IconName } from "./Icon";
-import { totalEpfBalance } from "./passbook-data";
+import { memberBalance, members, totalEpfBalance } from "./passbook-data";
 import { simulateJobLoss, simulateMarketDrawdown, simulateMedicalEmergency, type ScenarioId, type ScenarioResult } from "./scenario-data";
 
 type AgentAction = { id: string; title: string; detail: string; impact: "Reversible" | "Irreversible"; icon: IconName; destination: "Claims" | "Account"; tab?: "start" | "status"; section?: string };
 
 type Selection = { kind: "action"; item: AgentAction };
 type BackendActivity = { state: "working" | "success" | "error"; message: string };
-type ChatTurn = { id: string; question: string; status: "loading" | "done" | "error"; answer: AskAnswer | null };
+type ChatTurn = { id: string; question: string; status: "loading" | "done" | "error"; answers: AskAnswer[] | null };
+const THREAD_STORAGE_KEY = "epfo-finance-thread-v2";
+
+function storedTurns(value: unknown): ChatTurn[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((turn): turn is ChatTurn => {
+    if (typeof turn !== "object" || turn === null) return false;
+    const record = turn as Record<string, unknown>;
+    return typeof record.id === "string" && typeof record.question === "string" && record.status === "done" && Array.isArray(record.answers) && record.answers.every((answer: unknown) => typeof answer === "object" && answer !== null && typeof (answer as { text?: unknown }).text === "string");
+  });
+}
 
 export function EpfAgent({ onClose, onNavigate }: { onClose: () => void; onNavigate: (item: string, tab?: "start" | "status", claimId?: string, memberId?: string, section?: string) => void }) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [selected, setSelected] = useState<Selection | null>(null);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const threadLoaded = useRef(false);
   const [permissions, setPermissions] = useState({ epfo: true, cohort: true });
   const [connections, setConnections] = useState<ProviderConnections>({});
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -25,6 +36,21 @@ export function EpfAgent({ onClose, onNavigate }: { onClose: () => void; onNavig
 
   const eligibility = useMemo(() => checkAdvanceEligibility(), []);
   const transferLead = useMemo(() => findEligibleTransfer(), []);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      try {
+        setTurns(storedTurns(JSON.parse(localStorage.getItem(THREAD_STORAGE_KEY) ?? "[]")));
+      } catch {
+        localStorage.removeItem(THREAD_STORAGE_KEY);
+      }
+      threadLoaded.current = true;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (threadLoaded.current) localStorage.setItem(THREAD_STORAGE_KEY, JSON.stringify(turns));
+  }, [turns]);
 
   const actions = useMemo<AgentAction[]>(() => {
     const list: AgentAction[] = [];
@@ -38,6 +64,11 @@ export function EpfAgent({ onClose, onNavigate }: { onClose: () => void; onNavig
     const { item } = selected;
     onNavigate(item.destination, item.tab, undefined, undefined, item.section);
     onClose();
+  };
+
+  const clearThread = () => {
+    localStorage.removeItem(THREAD_STORAGE_KEY);
+    setTurns([]);
   };
 
   const runBackendAction = async (action: "permission" | "connect" | "disconnect" | "scope", target: string, working: string, success: string) => {
@@ -88,6 +119,7 @@ export function EpfAgent({ onClose, onNavigate }: { onClose: () => void; onNavig
 
   return <div className="finance-workspace">
     <h1 className="finance-workspace-title">Finance</h1>
+    <button type="button" className="agent-back" onClick={clearThread}>Clear conversation</button>
     <button type="button" className="finance-account-toggle" onClick={() => setSourcesOpen(true)} aria-label="Account access and eligibility" title="Account access and eligibility"><Icon name="settings" size={16} /></button>
     <div className="finance-workbench">
       <main className="finance-main">
@@ -117,6 +149,10 @@ export function EpfAgent({ onClose, onNavigate }: { onClose: () => void; onNavig
           <p>{UNRATED_PURPOSES.join(", ")} advances don&apos;t have a published minimum-service rule in this preview — check with EPFO directly.</p>
         </section>}
         <PermissionRow title="Anonymous cohort data" detail={pendingAction === "permission:cohort" ? "Saving access preference…" : "Age 32–36 · technology · 7–10 years' service"} checked={permissions.cohort} pending={pendingAction === "permission:cohort"} disabled={pendingAction !== null} onChange={() => updatePermission("cohort")} />
+        {permissions.cohort && <section className="finance-eligibility" aria-label="Cohort standing">
+          <h3>Cohort standing</h3>
+          <dl><div><dt>EPF balance<i className="agent-impact ok">Ahead of {percentileForBalance(totalEpfBalance())}%</i></dt><dd>{formatRupees(totalEpfBalance())} · {cohortBenchmark.methodology}</dd></div></dl>
+        </section>}
         <p className="finance-access-note">Permissions apply to this workspace only. No provider can see another provider&apos;s data. Connected brokerages and your EPFO passbook live next to the message box, not here.</p>
       </aside></>}
     </div>
@@ -287,8 +323,8 @@ function SlopeChart({ points, height = 140, formatValue = formatRupees }: { poin
 
 const CHART_PALETTE = ["#145ea8", "#e97824", "#167a53", "#8891c9", "#3735ad", "#bf3150"];
 
-function formatByUnit(value: number, unit: "currency" | "years"): string {
-  return unit === "currency" ? formatRupees(value) : `${value} yr${value === 1 ? "" : "s"}`;
+function formatByUnit(value: number, unit: "currency" | "years" | "percent"): string {
+  return unit === "currency" ? formatRupees(value) : unit === "percent" ? `${value}%` : `${value} yr${value === 1 ? "" : "s"}`;
 }
 
 function arcPath(cx: number, cy: number, r: number, startAngle: number, endAngle: number, innerR: number): string {
@@ -327,7 +363,7 @@ function binaryTreemap(points: IndexedPoint[], x: number, y: number, w: number, 
   return [...binaryTreemap(left, x, y, w, leftHeight, !vertical), ...binaryTreemap(right, x, y + leftHeight, w, h - leftHeight, !vertical)];
 }
 
-function GenericChart({ form, points, unit, height = 220 }: { form: ChartForm; points: DataPoint[]; unit: "currency" | "years"; height?: number }) {
+function GenericChart({ form, points, unit, height = 220 }: { form: ChartForm; points: DataPoint[]; unit: "currency" | "years" | "percent"; height?: number }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   if (form === "treemap") {
@@ -480,9 +516,11 @@ function TimelineChart({ segments }: { segments: TimelineSegment[] }) {
   </div>;
 }
 
-type DataSource = "retirement" | "withdrawal" | "pension" | "contributions" | "timeline" | "contribution_split" | "contributions_by_employer";
+type DataSource = "retirement" | "withdrawal" | "pension" | "contributions" | "timeline" | "contribution_split" | "contributions_by_employer" | "account_values" | "cohort_standing" | "cohort_metric";
 type ChartForm = "line" | "bar" | "pie" | "donut" | "treemap";
-type AgentIntent = { intentType: "claim_eligibility" | "retirement_projection" | "withdrawal_impact" | "pension_estimate" | "contribution_check" | "chart_request" | "portfolio_snapshot" | "scenario_simulation" | "cohort_comparison" | "unclear"; purpose: string | null; amount: number | null; dataSource: DataSource | null; chartForm: ChartForm | null; provider: "Zerodha" | "Upstox" | "Groww" | null; scenario: ScenarioId | null; months: number | null; dropPct: number | null; includeEpf: boolean; includePortfolio: boolean; includeCohort: boolean };
+type CohortMetric = "monthly_contribution" | "contribution_continuity" | "service_tenure" | "emergency_fund" | "investible_surplus" | "transfer_completion";
+type AgentOperation = { intentType: "claim_eligibility" | "retirement_projection" | "portfolio_projection" | "withdrawal_impact" | "pension_estimate" | "contribution_check" | "chart_request" | "portfolio_snapshot" | "scenario_simulation" | "cohort_comparison" | "cohort_insight" | "unclear"; purpose: string | null; amount: number | null; dataSource: DataSource | null; chartForm: ChartForm | null; provider: "Zerodha" | "Upstox" | "Groww" | null; scenario: ScenarioId | null; cohortMetric: CohortMetric | null; months: number | null; dropPct: number | null; includeEpf: boolean; includePortfolio: boolean; includeCohort: boolean };
+type AgentPlan = { operations: AgentOperation[] };
 
 const EPF_PRIMARY_INTENTS = new Set(["claim_eligibility", "retirement_projection", "withdrawal_impact", "pension_estimate", "contribution_check"]);
 
@@ -506,7 +544,7 @@ function cohortContextLine(cohortEnabled: boolean): string {
   return `On EPF balance alone, you're ahead of ${percentile}% of a matched cohort.`;
 }
 
-function applyCrossDomainContext(answer: AskAnswer, intentType: AgentIntent["intentType"], flags: { includeEpf: boolean; includePortfolio: boolean; includeCohort: boolean }, connections: ProviderConnections, epfoConnected: boolean, cohortEnabled: boolean): AskAnswer {
+function applyCrossDomainContext(answer: AskAnswer, intentType: AgentOperation["intentType"], flags: { includeEpf: boolean; includePortfolio: boolean; includeCohort: boolean }, connections: ProviderConnections, epfoConnected: boolean, cohortEnabled: boolean): AskAnswer {
   const extra: string[] = [];
   if (flags.includeEpf && !EPF_PRIMARY_INTENTS.has(intentType)) extra.push(epfContextLine(epfoConnected));
   if (flags.includePortfolio && intentType !== "portfolio_snapshot") {
@@ -518,15 +556,22 @@ function applyCrossDomainContext(answer: AskAnswer, intentType: AgentIntent["int
   return { ...answer, text: `${answer.text} ${extra.join(" ")}` };
 }
 
-function answerPortfolioSnapshot(provider: "Zerodha" | "Upstox" | "Groww" | null, connections: ProviderConnections): AskAnswer {
+function answerPortfolioSnapshot(provider: "Zerodha" | "Upstox" | "Groww" | null, connections: ProviderConnections, epfoConnected: boolean): AskAnswer {
   if (provider) return answerMention(provider, connections);
-  const epfLine = `Your EPF balance is ${formatRupees(totalEpfBalance())}.`;
   const connectedNames = PROVIDER_NAMES.filter((name) => connections[name]);
-  if (connectedNames.length === 0) return { text: `${epfLine} You haven't connected any brokerage accounts yet — use the broker panel next to the message box to link one and compare.` };
   const withValue = connectedNames.filter((name) => connections[name]?.value);
-  if (withValue.length === 0) return { text: `${epfLine} You've connected ${connectedNames.join(", ")}, but haven't shared portfolio value with the agent yet. Open the broker panel to choose what it can see.` };
-  const total = withValue.reduce((sum, name) => sum + providerAccounts.find((account) => account.name === name)!.value, 0);
-  const parts = [epfLine, `Across ${withValue.join(", ")}, your connected investments are worth ${formatRupees(total)}.`];
+  const epfAccounts = epfoConnected ? members.filter((member) => member.status !== "transferred") : [];
+  const brokerTotal = withValue.reduce((sum, name) => sum + providerAccounts.find((account) => account.name === name)!.value, 0);
+  const epfTotal = epfAccounts.reduce((sum, member) => sum + memberBalance(member), 0);
+  if (brokerTotal + epfTotal === 0) return { text: connectedNames.length ? `You've connected ${connectedNames.join(", ")}, but haven't shared portfolio value with the agent yet. Open the broker panel to choose what it can see.` : "You haven't connected any brokerage accounts, and your EPFO passbook is paused." };
+  const parts = [`Across your permitted accounts, the tracked total is ${formatRupees(brokerTotal + epfTotal)}.`];
+  if (epfAccounts.length) parts.push(`PF ${formatRupees(epfTotal)} — ${epfAccounts.map((member) => `${member.label}: ${formatRupees(memberBalance(member))}`).join("; ")}.`);
+  if (withValue.length) parts.push(`Investments ${formatRupees(brokerTotal)} — ${withValue.map((name) => {
+    const account = providerAccounts.find((item) => item.name === name)!;
+    return `${name}: ${formatRupees(account.value)} (gain ${formatRupees(account.value - account.invested)})`;
+  }).join("; ")}.`);
+  if (!epfoConnected) parts.push("Your EPFO passbook is paused, so PF accounts are excluded.");
+  if (connectedNames.length > withValue.length) parts.push(`Portfolio value is not shared for ${connectedNames.filter((name) => !connections[name]?.value).join(", ")}.`);
   const withHoldings = connectedNames.filter((name) => connections[name]?.holdings);
   if (withHoldings.length > 0) {
     const holdingsText = withHoldings.map((name) => {
@@ -547,6 +592,22 @@ function answerPortfolioSnapshot(provider: "Zerodha" | "Upstox" | "Groww" | null
   return { text: parts.join(" ") };
 }
 
+const PORTFOLIO_PROJECTION_RATE = 0.08;
+
+function answerPortfolioProjection(provider: "Zerodha" | "Upstox" | "Groww" | null, months: number | null, connections: ProviderConnections): AskAnswer {
+  const names = provider ? [provider] : PROVIDER_NAMES;
+  const accounts = names.filter((name) => connections[name]?.value).map((name) => providerAccounts.find((account) => account.name === name)!);
+  if (!accounts.length) return { text: provider ? `${provider} portfolio value is not shared with the agent yet.` : "No connected brokerage has shared portfolio value yet. Open the broker panel to share it before projecting investments." };
+  const horizonMonths = months && months > 0 ? Math.round(months) : 120;
+  const periods = Array.from({ length: Math.ceil(horizonMonths / 12) + 1 }, (_, index) => Math.min(index * 12, horizonMonths));
+  const total = accounts.reduce((sum, account) => sum + account.value, 0);
+  const projected = (value: number, period: number) => Math.round(value * (1 + PORTFOLIO_PROJECTION_RATE) ** (period / 12));
+  const series = periods.map((period) => ({ year: 2026 + Math.round(period / 12), balance: projected(total, period) }));
+  const projectedAccounts = accounts.map((account) => `${account.name}: ${formatRupees(projected(account.value, horizonMonths))}`);
+  const years = horizonMonths / 12;
+  return { text: `Illustrative ${years % 1 ? years.toFixed(1) : years}-year investment projection at ${(PORTFOLIO_PROJECTION_RATE * 100).toFixed(0)}% annually, with no future contributions: ${formatRupees(total)} to ${formatRupees(projected(total, horizonMonths))}. ${projectedAccounts.join("; ")}. Returns are not guaranteed.`, chart: { kind: "line", series } };
+}
+
 function scenarioAnswer(result: ScenarioResult): AskAnswer {
   const statsText = result.stats.map((stat) => `${stat.label}: ${stat.value}`).join(" · ");
   return { text: `${result.summary} ${statsText}. ${result.reassurance}`, chart: result.series ? { kind: "line", series: result.series, compareSeries: result.compareSeries ?? undefined } : undefined };
@@ -559,6 +620,20 @@ function answerCohortComparison(cohortEnabled: boolean): AskAnswer {
   const monthlyCredit = rahulProfile.epf.employeeContribution + rahulProfile.epf.employerEpfContribution;
   const contributionLead = Math.round((monthlyCredit / cohortBenchmark.medianMonthlyEpfCredit - 1) * 100);
   return { text: `Your PF balance of ${formatRupees(balance)} is ahead of ${percentile}% of a matched cohort (${cohortBenchmark.methodology}, ${cohortBenchmark.sampleSize.toLocaleString("en-IN")} profiles). Your monthly EPF credit of ${formatRupees(monthlyCredit)} is ${contributionLead >= 0 ? `${contributionLead}% above` : `${Math.abs(contributionLead)}% below`} the cohort median. This benchmark compares EPF balance only — connected brokerage investments aren't included. Illustrative, not EPFO-published data.` };
+}
+
+function answerCohortInsight(metric: CohortMetric | null, cohortEnabled: boolean): AskAnswer {
+  if (!cohortEnabled) return { text: "Cohort comparison is paused. Re-enable anonymous cohort data in Account access to compare peer benchmarks." };
+  if (!metric) return { text: "You can compare your monthly EPF credit, contribution continuity, service tenure, emergency-fund cover, investible surplus, or previous-PF-account transfer completion with this matched synthetic cohort." };
+  if (metric === "monthly_contribution") {
+    const value = rahulProfile.epf.employeeContribution + rahulProfile.epf.employerEpfContribution;
+    return { text: `Your monthly EPF credit is ${formatRupees(value)}, ${value >= cohortBenchmark.medianMonthlyEpfCredit ? "above" : "below"} the matched-cohort median of ${formatRupees(cohortBenchmark.medianMonthlyEpfCredit)}. EPS is excluded from this comparison.` };
+  }
+  if (metric === "contribution_continuity") return { text: `Your current EPF ledger has all expected deposits recorded (100% continuity) versus a ${cohortBenchmark.medianContributionContinuity}% matched-cohort median. This reflects recorded deposits, not a guarantee about future employer compliance.` };
+  if (metric === "service_tenure") return { text: `Your linked service history spans about ${serviceTimeline().reduce((total, segment) => total + segment.durationYears, 0).toFixed(1)} years, compared with a ${cohortBenchmark.medianServiceYears}-year cohort median. Completing the Civic Data Labs transfer preserves that history for pension calculations.` };
+  if (metric === "emergency_fund") return { text: `Your liquid savings cover ${rahulProfile.monthlyPlan.emergencyFundMonths} months of essential spending, compared with a ${cohortBenchmark.medianEmergencyFundMonths}-month cohort median. This is a cash-resilience comparison, not an investment-return measure.` };
+  if (metric === "investible_surplus") return { text: `Your monthly investible surplus is ${formatRupees(rahulProfile.monthlyPlan.investibleSurplus)}, compared with a ${formatRupees(cohortBenchmark.medianInvestibleSurplus)} matched-cohort median after essential and discretionary spending.` };
+  return { text: `You have one previous PF account still eligible to transfer. In this matched synthetic cohort, ${cohortBenchmark.previousAccountTransferCompletion}% of members with a previous account completed their transfer. Transfers can affect pensionable-service continuity; confirm the record before submitting Form 13.` };
 }
 
 function answerScenarioSimulation(scenario: ScenarioId | null, months: number | null, amount: number | null, dropPct: number | null, connections: ProviderConnections): AskAnswer {
@@ -574,13 +649,13 @@ type AskChart =
   | { kind: "slope"; points: SlopePoint[] }
   | { kind: "sparkline"; years: YearContribution[] }
   | { kind: "timeline"; segments: TimelineSegment[] }
-  | { kind: "generic"; form: ChartForm; title: string; points: DataPoint[]; unit: "currency" | "years" };
-type AskAnswer = { text: string; chart?: AskChart };
+  | { kind: "generic"; form: ChartForm; title: string; points: DataPoint[]; unit: "currency" | "years" | "percent" };
+type AskAnswer = { text: string; chart?: AskChart; chartContext?: AgentOperation };
 
 function defaultFormFor(source: DataSource): ChartForm {
   if (source === "retirement") return "line";
   if (source === "contribution_split") return "donut";
-  if (source === "contributions_by_employer") return "treemap";
+  if (source === "contributions_by_employer" || source === "account_values") return "treemap";
   return "bar";
 }
 
@@ -646,8 +721,34 @@ const CHART_OPTIONS: ChartOption[] = [
   { id: "contributions_by_employer", label: "Contribution total by employer", description: "Treemap of your recorded PF contribution, summed per employer.", query: "Show me a treemap of my total PF contribution by employer.", build: answerContributionByEmployer },
 ];
 
-function answerChartRequest(dataSource: DataSource | null, chartForm: ChartForm | null, amount: number | null): AskAnswer {
-  if (!dataSource) return { text: "I can chart your retirement projection, pension by claiming age, contribution history, contribution total by employer, employment timeline, contribution split, or a withdrawal comparison — as a line, bar, pie, donut or treemap. Try naming a data set (and a shape, if you want one), or type /chart to pick from a list." };
+function answerChartRequest(dataSource: DataSource | null, chartForm: ChartForm | null, amount: number | null, connections: ProviderConnections, epfoConnected: boolean, cohortEnabled: boolean, cohortMetric: CohortMetric | null): AskAnswer {
+  if (!dataSource) return { text: "I can chart your cohort standing, permitted brokerage and PF account values, retirement projection, pension by claiming age, contribution history, contribution total by employer, employment timeline, contribution split, or a withdrawal comparison — as a line, bar, pie, donut or treemap. Try naming a data set (and a shape, if you want one), or type /chart to pick from a list." };
+  if (dataSource === "cohort_standing") {
+    if (!cohortEnabled) return { text: "Cohort comparison is paused. Re-enable anonymous cohort data in Account access to chart your standing." };
+    const points = [...cohortBenchmark.balancePercentiles.map((point) => ({ label: `${point.percentile}th percentile`, value: point.value })), { label: "Your EPF balance", value: totalEpfBalance() }];
+    return { text: `Your EPF balance against the matched cohort; you are ahead of ${percentileForBalance(totalEpfBalance())}% of this illustrative cohort.`, chart: { kind: "generic", form: chartForm ?? "bar", title: "EPF cohort standing", points, unit: "currency" } };
+  }
+  if (dataSource === "cohort_metric") {
+    if (!cohortEnabled) return { text: "Cohort comparison is paused. Re-enable anonymous cohort data in Account access to chart this comparison." };
+    if (!cohortMetric) return { text: "Tell me which cohort measure to chart: monthly contribution, deposit continuity, service tenure, emergency fund, surplus, or transfer completion." };
+    const metric = cohortMetric === "monthly_contribution" ? { title: "Monthly EPF credit", unit: "currency" as const, your: rahulProfile.epf.employeeContribution + rahulProfile.epf.employerEpfContribution, median: cohortBenchmark.medianMonthlyEpfCredit }
+      : cohortMetric === "contribution_continuity" ? { title: "Contribution continuity", unit: "percent" as const, your: 100, median: cohortBenchmark.medianContributionContinuity }
+      : cohortMetric === "service_tenure" ? { title: "Linked service tenure", unit: "years" as const, your: serviceTimeline().reduce((total, segment) => total + segment.durationYears, 0), median: cohortBenchmark.medianServiceYears }
+      : cohortMetric === "emergency_fund" ? { title: "Emergency-fund cover", unit: "years" as const, your: rahulProfile.monthlyPlan.emergencyFundMonths, median: cohortBenchmark.medianEmergencyFundMonths }
+      : cohortMetric === "investible_surplus" ? { title: "Monthly investible surplus", unit: "currency" as const, your: rahulProfile.monthlyPlan.investibleSurplus, median: cohortBenchmark.medianInvestibleSurplus }
+      : { title: "Previous-PF transfer completion", unit: "percent" as const, your: 0, median: cohortBenchmark.previousAccountTransferCompletion };
+    const points = cohortMetric === "transfer_completion" ? [{ label: "Cohort completed transfer", value: metric.median }] : [{ label: "You", value: metric.your }, { label: "Cohort median", value: metric.median }];
+    const note = cohortMetric === "transfer_completion" ? "Your eligible Civic Data Labs transfer is still pending; the chart shows the cohort completion rate." : "Your value compared with the matched-cohort median.";
+    return { text: `${metric.title}. ${note}`, chart: { kind: "generic", form: chartForm ?? "bar", title: metric.title, points, unit: metric.unit } };
+  }
+  if (dataSource === "account_values") {
+    const points = [
+      ...epfoConnected ? members.filter((member) => member.status !== "transferred").map((member) => ({ label: `PF · ${member.label}`, value: memberBalance(member) })) : [],
+      ...PROVIDER_NAMES.filter((name) => connections[name]?.value).map((name) => ({ label: name, value: providerAccounts.find((account) => account.name === name)!.value })),
+    ];
+    if (!points.length) return { text: "No permitted account values are available yet. Connect your EPFO passbook or share portfolio value for a brokerage in the broker panel." };
+    return { text: "Current values across your permitted PF and brokerage accounts.", chart: { kind: "generic", form: chartForm ?? defaultFormFor(dataSource), title: "Permitted account values", points, unit: "currency" } };
+  }
   const series = buildGenericSeries(dataSource, amount);
   const form = chartForm ?? defaultFormFor(dataSource);
   const text = series.note ? `${series.title}. ${series.note}` : `${series.title}.`;
@@ -818,7 +919,7 @@ const CHART_FORMS: { id: ChartForm; label: string }[] = [
   { id: "treemap", label: "Treemap" },
 ];
 
-function GenericChartCard({ title, points, unit, initialForm }: { title: string; points: DataPoint[]; unit: "currency" | "years"; initialForm: ChartForm }) {
+function GenericChartCard({ title, points, unit, initialForm }: { title: string; points: DataPoint[]; unit: "currency" | "years" | "percent"; initialForm: ChartForm }) {
   const [form, setForm] = useState(initialForm);
   return <div>
     <div className="agent-chart-toggle" role="tablist" aria-label="Chart shape">
@@ -866,19 +967,19 @@ function AskInWords({ eligibility, connections, actions, turns, setTurns, pendin
   const mentionMatch = isMention ? MENTIONABLE.find((item) => trimmedLower === item.label || trimmedLower.startsWith(`${item.label} `)) : undefined;
 
   const pushInstant = useCallback((question: string, answer: AskAnswer) => {
-    setTurns((current) => [...current, { id: crypto.randomUUID(), question, status: "done", answer }]);
+    setTurns((current) => [...current, { id: crypto.randomUUID(), question, status: "done", answers: [answer] }]);
   }, [setTurns]);
 
-  const askAndPush = useCallback(async (question: string, compute: () => Promise<AskAnswer>) => {
+  const askAndPush = useCallback(async (question: string, compute: () => Promise<AskAnswer[]>) => {
     const id = crypto.randomUUID();
     setStatus("loading");
-    setTurns((current) => [...current, { id, question, status: "loading", answer: null }]);
+    setTurns((current) => [...current, { id, question, status: "loading", answers: null }]);
     try {
-      const answer = await compute();
-      setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, status: "done", answer } : turn)));
+      const answers = await compute();
+      setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, status: "done", answers } : turn)));
       setStatus("idle");
     } catch {
-      setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, status: "error", answer: null } : turn)));
+      setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, status: "error", answers: null } : turn)));
       setStatus("error");
     }
   }, [setTurns]);
@@ -886,23 +987,33 @@ function AskInWords({ eligibility, connections, actions, turns, setTurns, pendin
   const runQuery = useCallback((query: string) => {
     if (!query.trim()) return;
     askAndPush(query, async () => {
-      const response = await fetch("/api/agent-intent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: query }) });
+      const history = turns.flatMap((turn) => {
+        if (turn.status !== "done" || !turn.answers) return [];
+        const chart = [...turn.answers].reverse().find((answer) => answer.chartContext)?.chartContext;
+        return [{ question: turn.question, answer: turn.answers.map((answer) => answer.text).join(" "), ...(chart ? { chart } : {}) }];
+      });
+      const response = await fetch("/api/agent-intent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: query, history }) });
       const body = await response.json();
-      if (!response.ok || !body.intent) throw new Error(body.error ?? "failed");
-      const { intentType, purpose, amount, dataSource, chartForm, provider, scenario, months, dropPct, includeEpf, includePortfolio, includeCohort } = body.intent as AgentIntent;
+      if (!response.ok || !body.plan) throw new Error(body.error ?? "failed");
+      return (body.plan as AgentPlan).operations.map(({ intentType, purpose, amount, dataSource, chartForm, provider, scenario, cohortMetric, months, dropPct, includeEpf, includePortfolio, includeCohort }) => {
       const primary = intentType === "claim_eligibility" ? answerClaimEligibility(eligibility, purpose, amount)
         : intentType === "withdrawal_impact" ? answerWithdrawalImpact(amount)
         : intentType === "retirement_projection" ? answerRetirementProjection()
+        : intentType === "portfolio_projection" ? answerPortfolioProjection(provider, months, connections)
         : intentType === "pension_estimate" ? answerPensionEstimate()
         : intentType === "contribution_check" ? { text: checkContributionHealth().message }
-        : intentType === "chart_request" ? answerChartRequest(dataSource, chartForm, amount)
-        : intentType === "portfolio_snapshot" ? answerPortfolioSnapshot(provider, connections)
+        : intentType === "chart_request" ? answerChartRequest(dataSource, chartForm, amount, connections, epfoConnected, cohortEnabled, cohortMetric)
+        : intentType === "portfolio_snapshot" ? answerPortfolioSnapshot(provider, connections, epfoConnected)
         : intentType === "scenario_simulation" ? answerScenarioSimulation(scenario, months, amount, dropPct, connections)
         : intentType === "cohort_comparison" ? answerCohortComparison(cohortEnabled)
+        : intentType === "cohort_insight" ? answerCohortInsight(cohortMetric, cohortEnabled)
         : { text: "I couldn't tell what you're asking — try asking about a claim purpose, a chart, your retirement projection, your pension estimate, a contribution, a life-event scenario, how you compare to your cohort, or a connected investment." };
-      return applyCrossDomainContext(primary, intentType, { includeEpf, includePortfolio, includeCohort }, connections, epfoConnected, cohortEnabled);
+      const answer = applyCrossDomainContext(primary, intentType, { includeEpf, includePortfolio, includeCohort }, connections, epfoConnected, cohortEnabled);
+      const retainedSource = dataSource ?? (intentType === "retirement_projection" ? "retirement" : intentType === "withdrawal_impact" || (intentType === "claim_eligibility" && amount) ? "withdrawal" : intentType === "pension_estimate" ? "pension" : intentType === "cohort_comparison" ? "cohort_standing" : null);
+      return answer.chart ? { ...answer, chartContext: { intentType, purpose, amount, dataSource: retainedSource, chartForm, provider, scenario, cohortMetric, months, dropPct, includeEpf, includePortfolio, includeCohort } } : answer;
+      });
     });
-  }, [eligibility, connections, cohortEnabled, epfoConnected, askAndPush]);
+  }, [eligibility, connections, cohortEnabled, epfoConnected, turns, askAndPush]);
 
   const pickMention = useCallback((source: MentionSource) => {
     const label = MENTIONABLE.find((item) => item.id === source)?.label ?? `@${source}`;
@@ -963,7 +1074,7 @@ function AskInWords({ eligibility, connections, actions, turns, setTurns, pendin
         <div className="agent-chat-question">{turn.question}</div>
         {turn.status === "loading" ? <div className="agent-ask-answer is-loading"><span className="agent-ask-spinner" aria-hidden="true" /><div><p>Thinking…</p></div></div>
         : turn.status === "error" ? <div className="agent-ask-answer is-error"><Icon name="bell" size={15} /><div><p>Couldn&apos;t reach the intent service. Confirm OPENAI_API_KEY is set and try again.</p></div></div>
-        : turn.answer && <div className="agent-ask-answer"><Icon name="spark" size={15} /><div><p>{turn.answer.text}</p>{turn.answer.chart && <AskChartView chart={turn.answer.chart} />}</div></div>}
+        : turn.answers?.map((answer, index) => <div key={index} className="agent-ask-answer"><Icon name="spark" size={15} /><div><p>{answer.text}</p>{answer.chart && <AskChartView chart={answer.chart} />}</div></div>)}
       </div>)}
     </div>
     <form onSubmit={ask}>

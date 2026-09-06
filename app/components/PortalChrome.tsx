@@ -15,7 +15,7 @@ const navigation: Record<PortalType, NavigationItem[]> = {
     { label: "Claims", icon: "claim" },
     { label: "Passbook", icon: "book" },
     { label: "Service history", value: "ServiceHistory", icon: "briefcase" },
-    { label: "Finance", icon: "spark" },
+    { label: "Finance Agent", value: "Finance", icon: "spark" },
   ],
   employer: [
     { label: "Overview", icon: "home" },
@@ -95,11 +95,10 @@ export function PortalTopbar({
         <a
           className="voice-call"
           href={`tel:${voiceNumber}`}
-          aria-label={`${t("Call EPFO customer care")} ${voiceNumber}`}
+          aria-label={t("Call EPFO Helpdesk")}
         >
           <Icon name="phone" size={16} />
-          <span>{t("Call")}</span>
-          <b>{voiceNumber}</b>
+          <span>{t("Call EPFO Helpdesk")}</span>
         </a>
         {onOpenAgent && (
           <button className="agent-launch" type="button" onClick={onOpenAgent}>
