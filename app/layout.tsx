@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./transitions.css";
 import "./identity.css";
+import "./finance-workspace.css";
 import { LanguageProvider } from "./language";
 
 export const metadata: Metadata = {

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { findEligibleTransfer } from "./agent-data";
 import { useLanguage } from "../language";
 import { EmploymentHistory } from "./EmploymentHistory";
 import { ClaimsWorkspace } from "./ClaimsWorkspace";
@@ -12,15 +13,35 @@ import { PortalSidebar, PortalTopbar } from "./PortalChrome";
 import { AccountProfile } from "./AccountProfile";
 import { EpfAgent } from "./EpfAgent";
 
-export function Portal({ initialNav = "Home", initialClaimsTab = "status", initialClaimId, initialMemberId, initialProfileSection, onLogout }: { initialNav?: string; initialClaimsTab?: "start" | "status"; initialClaimId?: string; initialMemberId?: string; initialProfileSection?: string; onLogout?: () => void }) {
+export function Portal({
+  initialNav = "Home",
+  initialClaimsTab = "status",
+  initialClaimId,
+  initialMemberId,
+  initialProfileSection,
+  onLogout,
+}: {
+  initialNav?: string;
+  initialClaimsTab?: "start" | "status";
+  initialClaimId?: string;
+  initialMemberId?: string;
+  initialProfileSection?: string;
+  onLogout?: () => void;
+}) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [agentOpen, setAgentOpen] = useState(false);
-  const [agentWidth, setAgentWidth] = useState(420);
   const activeNav = initialNav;
   const isHome = activeNav === "Home";
+  const isFinance = activeNav === "Finance";
+  const transferLead = useMemo(() => findEligibleTransfer(), []);
 
-  const navigate = (item: string, tab?: "start" | "status", claimId?: string, memberId?: string, section?: string) => {
+  const navigate = (
+    item: string,
+    tab?: "start" | "status",
+    claimId?: string,
+    memberId?: string,
+    section?: string,
+  ) => {
     if (item === "Home") return router.push("/");
     const query = new URLSearchParams({ view: item });
     if (item === "Claims") {
@@ -32,28 +53,71 @@ export function Portal({ initialNav = "Home", initialClaimsTab = "status", initi
     router.push(`/?${query}`);
   };
 
-  return (
-    <main className="app-shell" style={{ "--agent-width": `${agentWidth}px` } as CSSProperties}>
-      <PortalTopbar mobileOpen={mobileOpen} onToggleMobile={() => setMobileOpen(!mobileOpen)} onOpenAccount={() => navigate("Account")} onOpenAgent={() => setAgentOpen(true)} onLogout={onLogout} />
-      <PortalSidebar type="member" activeNav={activeNav} mobileOpen={mobileOpen} onNavigate={navigate} onClose={() => setMobileOpen(false)} />
+  const agentAlert = transferLead
+    ? {
+        title: `Prepare a PF transfer — ${transferLead.employer}`,
+        detail: "Eligible to merge into your current Member ID.",
+        onOpen: () => navigate("Finance"),
+      }
+    : undefined;
 
-      <section key={activeNav} className={`content page-enter${agentOpen ? " agent-open" : ""}`}>
-        <PageHeader activeNav={activeNav} />
-        {activeNav === "Passbook" ? (
-          <Passbook initialMemberId={initialMemberId} />
-        ) : activeNav === "ServiceHistory" ? (
-          <EmploymentHistory onOpenPassbook={(memberId) => navigate("Passbook", undefined, undefined, memberId)} onStartTransfer={() => navigate("Claims", "start")} />
-        ) : activeNav === "Claims" ? (
-          <ClaimsWorkspace initialTab={initialClaimsTab} initialClaimId={initialClaimId} />
-        ) : activeNav === "Account" ? (
-          <AccountProfile initialSection={initialProfileSection} onTrackRequest={(id) => navigate("Claims", "status", id)} onLogout={onLogout} />
-        ) : !isHome ? (
-          <PlaceholderView activeNav={activeNav} onReturn={() => navigate("Home")} />
+  return (
+    <main className="app-shell">
+      <PortalTopbar
+        mobileOpen={mobileOpen}
+        onToggleMobile={() => setMobileOpen(!mobileOpen)}
+        onOpenAccount={() => navigate("Account")}
+        agentAlert={agentAlert}
+        onLogout={onLogout}
+      />
+      <PortalSidebar
+        type="member"
+        activeNav={activeNav}
+        mobileOpen={mobileOpen}
+        onNavigate={navigate}
+        onClose={() => setMobileOpen(false)}
+      />
+
+      <section
+        key={activeNav}
+        className={`content page-enter${isFinance ? " finance-workspace-content" : ""}`}
+      >
+        {isFinance ? (
+          <EpfAgent onClose={() => navigate("Home")} onNavigate={navigate} />
         ) : (
-          <MemberDashboard onNavigate={navigate} />
+          <>
+            <PageHeader activeNav={activeNav} />
+            {activeNav === "Passbook" ? (
+              <Passbook initialMemberId={initialMemberId} />
+            ) : activeNav === "ServiceHistory" ? (
+              <EmploymentHistory
+                onOpenPassbook={(memberId) =>
+                  navigate("Passbook", undefined, undefined, memberId)
+                }
+                onStartTransfer={() => navigate("Claims", "start")}
+              />
+            ) : activeNav === "Claims" ? (
+              <ClaimsWorkspace
+                initialTab={initialClaimsTab}
+                initialClaimId={initialClaimId}
+              />
+            ) : activeNav === "Account" ? (
+              <AccountProfile
+                initialSection={initialProfileSection}
+                onTrackRequest={(id) => navigate("Claims", "status", id)}
+                onLogout={onLogout}
+              />
+            ) : !isHome ? (
+              <PlaceholderView
+                activeNav={activeNav}
+                onReturn={() => navigate("Home")}
+              />
+            ) : (
+              <MemberDashboard onNavigate={navigate} />
+            )}
+          </>
         )}
       </section>
-      {agentOpen && <EpfAgent onClose={() => setAgentOpen(false)} onNavigate={navigate} width={agentWidth} onResize={setAgentWidth} />}
     </main>
   );
 }
@@ -66,28 +130,63 @@ function PageHeader({ activeNav }: { activeNav: string }) {
   return (
     <>
       <div className="context-strip">
-        <span className="verified-pill"><Icon name="shield" size={15} /> {t("Aadhaar verified")}</span>
+        <span className="verified-pill">
+          <Icon name="shield" size={15} /> {t("Aadhaar verified")}
+        </span>
       </div>
       <div className="page-head">
         <div>
           <p className="eyebrow">{t("MONDAY, 24 AUGUST")}</p>
-          <h1>{isServiceHistory ? t("Service history") : isClaims ? t("Claims") : isAccount ? t("Profile details") : t("Good afternoon, Rahul")}</h1>
-          <p>{isServiceHistory ? t("Your connected employment accounts and PF transfers.") : isClaims ? t("Start a claim or track your current and past claims.") : isAccount ? t("Your EPFO identity and contact details.") : t("Your retirement savings, contributions and claims in one place.")}</p>
+          <h1>
+            {isServiceHistory
+              ? t("Service history")
+              : isClaims
+                ? t("Claims")
+                : isAccount
+                  ? t("Profile details")
+                  : t("Good afternoon, Rahul")}
+          </h1>
+          <p>
+            {isServiceHistory
+              ? t("Your connected employment accounts and PF transfers.")
+              : isClaims
+                ? t("Start a claim or track your current and past claims.")
+                : isAccount
+                  ? t("Your EPFO identity and contact details.")
+                  : t(
+                      "Your retirement savings, contributions and claims in one place.",
+                    )}
+          </p>
         </div>
       </div>
     </>
   );
 }
 
-function PlaceholderView({ activeNav, onReturn }: { activeNav: string; onReturn: () => void }) {
+function PlaceholderView({
+  activeNav,
+  onReturn,
+}: {
+  activeNav: string;
+  onReturn: () => void;
+}) {
   const { t, tpl } = useLanguage();
   return (
     <section className="placeholder-view">
-      <div className="placeholder-icon"><Icon name="book" size={26} /></div>
+      <div className="placeholder-icon">
+        <Icon name="book" size={26} />
+      </div>
       <p className="eyebrow">{t("My retirement account")}</p>
       <h2>{t(activeNav)}</h2>
-      <p>{tpl("This workspace is ready for the {item} journey. Your active role and scope remain visible while you work.", { item: t(activeNav).toLowerCase() })}</p>
-      <button className="primary-button" onClick={onReturn}>{t("Return home")}</button>
+      <p>
+        {tpl(
+          "This workspace is ready for the {item} journey. Your active role and scope remain visible while you work.",
+          { item: t(activeNav).toLowerCase() },
+        )}
+      </p>
+      <button className="primary-button" onClick={onReturn}>
+        {t("Return home")}
+      </button>
     </section>
   );
 }

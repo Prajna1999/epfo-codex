@@ -1,0 +1,18 @@
+[
+  {
+    "date": "2026-09-04",
+    "macrostructure": "Workbench — Chat/Plan",
+    "theme": "custom institutional",
+    "theme_axes": "light / geometric-sans / cool",
+    "enrichment": "none",
+    "brief": "Progressive-disclosure finance workspace with visible benchmark cards"
+  },
+  {
+    "date": "2026-09-04",
+    "macrostructure": "Workbench",
+    "theme": "custom institutional",
+    "theme_axes": "light / geometric-sans / cool",
+    "enrichment": "none",
+    "brief": "Full-page EPF personal finance workspace"
+  }
+]

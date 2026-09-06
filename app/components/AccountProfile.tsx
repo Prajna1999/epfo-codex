@@ -7,6 +7,7 @@ import { isMockOtp } from "./mock-login-data";
 import { Icon, type IconName } from "./Icon";
 import { readBrowserStore, writeBrowserStore } from "./browser-store";
 import type { ClaimRecord } from "./claims-data";
+import { rahulProfile } from "./finance-profile-data";
 import styles from "./account-profile.module.css";
 
 type Flow = "identity" | "kyc" | "nomination" | "joint";
@@ -14,10 +15,10 @@ type Request = { title: string; status: string; route: string };
 type ProfileSection = { id: Flow; title: string; icon: IconName; fields: [string, string][] };
 
 const sections: ProfileSection[] = [
-  { id: "identity", title: "Identity and contact", icon: "user", fields: [["Name", "Rahul Patil"], ["Universal Account Number", "1009 2000 0123"], ["Aadhaar", "•••• •••• 5478 · Verified by UIDAI"], ["PAN", "AXXPP1234K · Verified"], ["Date of birth", "14 May 1992"], ["Gender", "Male"], ["Father's name", "Madhav Patil"], ["Marital status", "Married"], ["Mobile number", "+91 98••• 8842 · Verified"], ["Email ID", "rahul.patil@example.com · Verified"], ["Correspondence address", "A-402, Green Meadows, Whitefield, Bengaluru, Karnataka 560066"], ["Permanent address", "12 Shastri Nagar, Pune, Maharashtra 411005"]] },
+  { id: "identity", title: "Identity and contact", icon: "user", fields: [["Name", rahulProfile.person.name], ["Universal Account Number", "1009 2000 0123"], ["Aadhaar", "•••• •••• 5478 · Verified by UIDAI"], ["PAN", "AXXPP1234K · Verified"], ["Date of birth", rahulProfile.person.dateOfBirth], ["Gender", "Male"], ["Father's name", "Madhav Patil"], ["Marital status", "Married"], ["Mobile number", "+91 98••• 8842 · Verified"], ["Email ID", "rahul.patil@example.com · Verified"], ["Correspondence address", "A-402, Green Meadows, Whitefield, Bengaluru, Karnataka 560066"], ["Permanent address", "12 Shastri Nagar, Pune, Maharashtra 411005"]] },
   { id: "kyc", title: "KYC and bank", icon: "shield", fields: [["Aadhaar", "•••• •••• 5478 · Verified by UIDAI"], ["PAN", "AXXPP1234K · Digitally approved"], ["Bank account", "HDFC Bank •••• 4821 · Verified"], ["IFSC", "HDFC0001234"]] },
   { id: "nomination", title: "Nomination", icon: "users", fields: [["Nominee", "Priya Patil"], ["Relationship", "Spouse"], ["Date of birth", "18 Sep 1994"], ["EPF share", "100%"], ["e-Nomination status", "Registered"]] },
-  { id: "joint", title: "Employment", icon: "briefcase", fields: [["Current establishment", "Infosys Limited"], ["Member ID", "MHBAN1318576000010404"], ["Date of joining", "03 Nov 2025"], ["PF transfer status", "Previous PF transferred"], ["Previous employment", "Techcore Systems · 01 Nov 2022 – 07 Aug 2023"]] },
+  { id: "joint", title: "Employment", icon: "briefcase", fields: [["Current establishment", rahulProfile.employment.employer], ["Role", rahulProfile.person.occupation], ["Member ID", "MHBAN1318576000010404"], ["Date of joining", "03 Nov 2025"], ["Monthly PF wage", `₹${rahulProfile.employment.monthlyBasicPay.toLocaleString("en-IN")}`], ["Latest employee EPF", `₹${rahulProfile.epf.employeeContribution.toLocaleString("en-IN")}`], ["Latest employer EPF", `₹${rahulProfile.epf.employerEpfContribution.toLocaleString("en-IN")}`], ["EPS allocation", `₹${rahulProfile.epf.employerEpsContribution.toLocaleString("en-IN")}`], ["Completed transfer", "Techcore Systems · ₹4,99,574 · 18 Jan 2026"], ["Transfer available", "Civic Data Labs · ₹2,85,000"]] },
 ];
 const selfAttested = new Set(["Mobile number", "Email ID", "Correspondence address", "Permanent address"]);
 

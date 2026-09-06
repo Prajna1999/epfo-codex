@@ -31,9 +31,9 @@ export function Passbook({ initialMemberId }: { initialMemberId?: string }) {
         <div className={styles.member}><span>{t("Member ID")}</span><strong>{memberId}</strong><span>{member.label}</span></div>
         <div className={styles.tableWrap}>
           <table>
-            <thead><tr><th>{t("Date")}</th><th>{t("Particulars")}</th><th>{t("Credit")}</th><th>{t("Debit")}</th></tr></thead>
+            <thead><tr><th>{t("Date")}</th><th>{t("Particulars")}</th><th>Employee EPF</th><th>Employer EPF</th><th>EPS</th><th>{t("Other credit")}</th><th>{t("Debit")}</th></tr></thead>
             <tbody>
-              {passbook.entries.map((entry) => <tr key={`${entry.date}-${entry.particulars}`}><td>{entry.date}</td><td>{entry.particulars}</td><td className={styles.credit}>{entry.type === "credit" ? formatAmount(entry.amount) : "—"}</td><td className={styles.debit}>{entry.type === "debit" ? formatAmount(entry.amount) : "—"}</td></tr>)}
+              {passbook.entries.map((entry) => <tr key={`${entry.date}-${entry.particulars}`}><td>{entry.date}</td><td>{entry.particulars}{entry.reference && <small>{entry.reference}</small>}</td><td className={styles.credit}>{entry.employeeShare ? formatAmount(entry.employeeShare) : "—"}</td><td className={styles.credit}>{entry.employerShare ? formatAmount(entry.employerShare) : "—"}</td><td>{entry.pensionShare ? formatAmount(entry.pensionShare) : "—"}</td><td className={styles.credit}>{entry.type === "credit" && entry.category !== "contribution" ? formatAmount(entry.amount) : "—"}</td><td className={styles.debit}>{entry.type === "debit" ? formatAmount(entry.amount) : "—"}</td></tr>)}
             </tbody>
           </table>
         </div>

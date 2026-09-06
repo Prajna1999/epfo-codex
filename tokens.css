@@ -22,4 +22,17 @@
   --shadow-card: 0 16px 38px oklch(20% .03 250 / .07);
   --shadow-float: 0 20px 50px oklch(20% .03 250 / .12);
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --color-workspace: oklch(96.5% .01 245);
+  --color-panel: oklch(99.5% .004 245);
+  --color-ink-strong: oklch(18% .035 250);
+  --color-positive-soft: oklch(94% .035 153);
+  --color-warning: oklch(56% .15 52);
+  --color-warning-soft: oklch(96% .035 68);
+  --color-accent-translucent: oklch(43% .145 248 / .12);
+  --color-shadow: oklch(20% .03 250 / .08);
+  --space-1: .25rem;
+  --space-8: 5rem;
+  --radius-lg: 1.25rem;
+  --dur-medium: 220ms;
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
 }

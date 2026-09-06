@@ -100,7 +100,7 @@ function RecoveryScreen({ role, type, onBack }: { role: Role; type: RecoveryType
     {stage === "details" && <form className="login-form" onSubmit={begin}>
       <p className="login-role-copy">{type === "password" ? t("We will verify your registered mobile number before continuing.") : isMember ? t("Find your UAN using details recorded with EPFO.") : t("We will send your login ID to your registered mobile number.")}</p>
       {type === "id" && isMember && <label>{t("Identify using")}<select defaultValue="Member ID"><option>Member ID</option><option>Aadhaar</option><option>PAN</option></select></label>}
-      {type === "id" && isMember && <><label>{t("Full name")}<input required defaultValue="Rahul Patil" /></label><label>{t("Date of birth")}<input required type="date" defaultValue="1992-06-14" /></label></>}
+      {type === "id" && isMember && <><label>{t("Full name")}<input required defaultValue="Rahul Patil" /></label><label>{t("Date of birth")}<input required type="date" defaultValue="1992-05-14" /></label></>}
       <label>{t(type === "password" || !isMember ? currentRole.identifier : "Mobile number")}<input required inputMode={type === "password" && isMember ? "numeric" : "text"} defaultValue={type === "password" || !isMember ? currentRole.loginId : "9876543210"} /></label>
       {type === "id" && isMember && <label>{t("Email address")}<input required type="email" defaultValue="rahul.patil@example.com" /></label>}
       {type === "password" && <label>{t("Registered mobile number")}<input required inputMode="numeric" defaultValue="9876543210" /></label>}
