@@ -1017,10 +1017,10 @@ function AskInWords({ eligibility, connections, actions, turns, setTurns, pendin
 
   const pickMention = useCallback((source: MentionSource) => {
     const label = MENTIONABLE.find((item) => item.id === source)?.label ?? `@${source}`;
-    setText("");
+    setText(`${label} `);
     setFocused(false);
-    pushInstant(label, answerMention(source, connections));
-  }, [connections, pushInstant]);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
 
   const ask = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1029,8 +1029,10 @@ function AskInWords({ eligibility, connections, actions, turns, setTurns, pendin
       return;
     }
     if (isMention) {
-      if (mentionMatch) pickMention(mentionMatch.id);
-      return;
+      if (mentionMatch && trimmedLower === mentionMatch.label) {
+        inputRef.current?.focus();
+        return;
+      }
     }
     if (isSlash) return;
     // An unedited pick from the /chart list answers instantly from real computed data; edit even one word and it falls through to the AI classifier instead.
@@ -1057,7 +1059,7 @@ function AskInWords({ eligibility, connections, actions, turns, setTurns, pendin
   const presetQuestions = useMemo(() => [...PRESET_QUESTIONS, ...PROVIDER_NAMES.filter((name) => connections[name]).map((name) => PROVIDER_PRESET_QUESTIONS[name])], [connections]);
 
   const canSubmit = isChartMode ? !!chartQuery
-    : isMention ? !!mentionMatch
+    : isMention ? !!mentionMatch && trimmedLower !== mentionMatch.label
     : isSlash ? false
     : text.trim().length > 0;
 
